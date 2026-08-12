@@ -23,7 +23,7 @@ const CONFIG = {
   // writing, reverse-geocoded by Trakzee as "Ganesh Basti, Chappal Karkhana,
   // Kathmandu") - almost certainly the actual yard. Confirm it and adjust if
   // the real depot is elsewhere.
-  PARK_CENTER: { lat: 27.7367, lon: 85.3419 },
+  PARK_CENTER: { lat: 27.7262884, lon: 85.3482266 },
   PARK_RADIUS_M: 200,
 
   // A vehicle with no report in longer than this counts as "offline".
