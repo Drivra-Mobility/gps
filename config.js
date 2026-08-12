@@ -36,8 +36,8 @@ const CONFIG = {
   // compound, so a tighter radius than the 200m outdoor parking yard seemed
   // right. CONFIRM THIS once there's real data near this point, the same
   // way PARK_RADIUS_M was derived.
-  MAINTENANCE_CENTER: { lat: 27.7181811, lon: 85.3145027 },
-  MAINTENANCE_RADIUS_M: 100, // GUESS - not data-derived, see comment above
+  MAINTENANCE_CENTER: { lat: 27.736275, lon: 85.3430127 },
+  MAINTENANCE_RADIUS_M: 200, // GUESS - not data-derived, see comment above
 
   // A vehicle with no report in longer than this counts as "offline".
   STALE_MINUTES: 60,
