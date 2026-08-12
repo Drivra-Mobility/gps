@@ -19,10 +19,20 @@ const GEO = (() => {
     return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a));
   }
 
-  function isWithinParking(lat, lon) {
+  // Generic geofence membership check - both PARK_CENTER/PARK_RADIUS_M and
+  // MAINTENANCE_CENTER/MAINTENANCE_RADIUS_M go through this. The isWithin*
+  // wrappers exist only so call sites don't thread CONFIG constants by hand.
+  function isWithin(lat, lon, center, radiusM) {
     if (lat == null || lon == null) return false;
-    const d = distanceMeters(lat, lon, CONFIG.PARK_CENTER.lat, CONFIG.PARK_CENTER.lon);
-    return d <= CONFIG.PARK_RADIUS_M;
+    return distanceMeters(lat, lon, center.lat, center.lon) <= radiusM;
+  }
+
+  function isWithinParking(lat, lon) {
+    return isWithin(lat, lon, CONFIG.PARK_CENTER, CONFIG.PARK_RADIUS_M);
+  }
+
+  function isWithinMaintenance(lat, lon) {
+    return isWithin(lat, lon, CONFIG.MAINTENANCE_CENTER, CONFIG.MAINTENANCE_RADIUS_M);
   }
 
   // Sum of consecutive great-circle hops through a time-ordered list of
@@ -43,5 +53,12 @@ const GEO = (() => {
     return m / 1000;
   }
 
-  return { distanceMeters, isWithinParking, pathDistanceMeters, metersToKm };
+  return {
+    distanceMeters,
+    isWithin,
+    isWithinParking,
+    isWithinMaintenance,
+    pathDistanceMeters,
+    metersToKm,
+  };
 })();

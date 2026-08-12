@@ -26,7 +26,12 @@ const CHART = (() => {
   // ---- Line chart -------------------------------------------------------
   // data: [{x: Date, y: number}], sorted ascending by x.
   function lineChart(svg, data, opts) {
-    const { valueLabel = (v) => String(Math.round(v)), tipTitle = "", color } = opts;
+    const {
+      valueLabel = (v) => String(Math.round(v)),
+      tipTitle = "",
+      color,
+      xLabel = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    } = opts;
     svg.innerHTML = "";
     const rootStyle = getComputedStyle(document.documentElement);
     const seriesColor = color || rootStyle.getPropertyValue("--state-moving").trim();
@@ -91,20 +96,41 @@ const CHART = (() => {
     );
 
     // X-axis: first / middle / last timestamp, short form.
-    const fmtTime = (d) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     [0, Math.floor(data.length / 2), data.length - 1].forEach((i, idx) => {
       const d = data[i];
       const anchor = idx === 0 ? "start" : idx === 2 ? "end" : "middle";
       const t = el("text", { x: xScale(d.x.getTime()), y: height - 6, "text-anchor": anchor, class: "axis-label" });
-      t.textContent = fmtTime(d.x);
+      t.textContent = xLabel(d.x);
       g.appendChild(t);
     });
 
-    // Area wash, then the line on top.
+    // Area wash, then the line on top. The line draws in left-to-right on
+    // first render (classic stroke-dashoffset trick, SMIL <animate> - no
+    // dependency, consistent with this file's hand-rolled-SVG approach) so
+    // a chart reads as something that just happened, not a static image.
     const linePoints = data.map((d) => `${xScale(d.x.getTime())},${yScale(d.y)}`).join(" ");
     const areaPoints = `${xScale(xMin)},${yScale(0)} ${linePoints} ${xScale(xMax)},${yScale(0)}`;
-    g.appendChild(el("polygon", { points: areaPoints, class: "series-area", style: `fill:${seriesColor}` }));
-    g.appendChild(el("polyline", { points: linePoints, class: "series-line", style: `stroke:${seriesColor}` }));
+    const area = el("polygon", { points: areaPoints, class: "series-area", style: `fill:${seriesColor};opacity:0` });
+    g.appendChild(area);
+    area.appendChild(el("animate", { attributeName: "opacity", from: "0", to: "1", dur: "0.5s", begin: "0.2s", fill: "freeze" }));
+    const line = el("polyline", { points: linePoints, class: "series-line", style: `stroke:${seriesColor}` });
+    g.appendChild(line);
+    const lineLength = line.getTotalLength ? line.getTotalLength() : 0;
+    if (lineLength > 0) {
+      line.setAttribute("stroke-dasharray", lineLength);
+      line.setAttribute("stroke-dashoffset", lineLength);
+      line.appendChild(
+        el("animate", {
+          attributeName: "stroke-dashoffset",
+          from: lineLength,
+          to: 0,
+          dur: "0.6s",
+          fill: "freeze",
+          calcMode: "spline",
+          keySplines: "0.4 0 0.2 1",
+        })
+      );
+    }
 
     // Endpoint label - the one value labelled directly, per the "label
     // selectively" rule.
@@ -177,10 +203,7 @@ const CHART = (() => {
       focusDot.setAttribute("visibility", "visible");
       if (tipEl) {
         tipEl.hidden = false;
-        tipEl.innerHTML = `<div>${tipTitle}</div><div>${d.x.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        })} — <strong>${valueLabel(d.y)}</strong></div>`;
+        tipEl.innerHTML = `<div>${tipTitle}</div><div>${xLabel(d.x)} — <strong>${valueLabel(d.y)}</strong></div>`;
         const wrapRect = svg.parentElement.getBoundingClientRect();
         tipEl.style.left = `${clientX - wrapRect.left + 12}px`;
         tipEl.style.top = `${clientY - wrapRect.top - 12}px`;
@@ -241,12 +264,24 @@ const CHART = (() => {
       const bar = el("rect", {
         x: margin.left,
         y,
-        width: w,
+        width: 0,
         height: barH,
         rx: 4,
         style: `fill:${barColor}`,
       });
       svg.appendChild(bar);
+      bar.appendChild(
+        el("animate", {
+          attributeName: "width",
+          from: "0",
+          to: w,
+          dur: "0.4s",
+          begin: `${i * 0.03}s`,
+          fill: "freeze",
+          calcMode: "spline",
+          keySplines: "0.3 0 0.2 1",
+        })
+      );
 
       // Value at the tip. If it wouldn't fit past the bar end, this chart's
       // bars never get that long relative to the label column, so tip

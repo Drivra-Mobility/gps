@@ -48,6 +48,78 @@ const API = (() => {
     return data;
   }
 
+  // Multi-day, per-vehicle-per-day analytics (moving/idle/parked/maintenance
+  // seconds, distance, first departure from parking, parked-overnight) -
+  // computed in Postgres, see trackezz/supabase/schema.sql's
+  // vehicle_day_metrics(). Geofence coordinates and the fleet timezone are
+  // passed through from CONFIG on every call, NOT duplicated in SQL -
+  // config.js stays the one place that says where the yard/garage are.
+  async function fetchDailyMetrics({ startDate, endDate, imei = null }) {
+    const { data, error } = await AUTH.client.rpc("vehicle_day_metrics", {
+      p_start_date: startDate, // "YYYY-MM-DD", Kathmandu calendar date, inclusive
+      p_end_date: endDate, // inclusive
+      p_park_lat: CONFIG.PARK_CENTER.lat,
+      p_park_lon: CONFIG.PARK_CENTER.lon,
+      p_park_radius_m: CONFIG.PARK_RADIUS_M,
+      p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
+      p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
+      p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
+      p_imei: imei,
+      p_overnight_start_hour: CONFIG.OVERNIGHT_START_HOUR,
+      p_overnight_end_hour: CONFIG.OVERNIGHT_END_HOUR,
+      p_max_gap_minutes: CONFIG.MAX_GAP_MINUTES,
+      p_tz: CONFIG.TIMEZONE,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  // Discrete maintenance-visit episodes (start/end/duration), grouping
+  // consecutive maintenance-state readings so a single repair spanning
+  // multiple days is one row, not fragmented per-day. See schema.sql's
+  // vehicle_maintenance_visits(). visit_end is null and is_ongoing is true
+  // for a visit still in progress as of "now."
+  //
+  // startDate bounds how far back to scan (Kathmandu calendar date, or null
+  // for no lower bound).
+  async function fetchMaintenanceVisits({ imei = null, startDate = null } = {}) {
+    const { data, error } = await AUTH.client.rpc("vehicle_maintenance_visits", {
+      p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
+      p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
+      p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
+      p_imei: imei,
+      p_since: startDate,
+      p_tz: CONFIG.TIMEZONE,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  // How long a vehicle has continuously been in its current classify()
+  // state, estimated client-side from whatever history rows are already
+  // loaded (no extra query) - walks backward from the latest reading while
+  // the state stays the same, respecting the same MAX_GAP_MINUTES gap rule
+  // as vehicleMetrics(). Returns { seconds, sinceStart } where sinceStart
+  // is true if the streak runs all the way to the first loaded row (so the
+  // real duration may be longer than what's reported - an "at least"
+  // caveat, not a lower bound guarantee beyond the window).
+  function stateDurationFromHistory(rows, currentState) {
+    if (!rows.length) return { seconds: 0, sinceStart: false };
+    let i = rows.length - 1;
+    let seconds = 0;
+    while (i > 0) {
+      const prev = rows[i - 1];
+      const cur = rows[i];
+      if (classify(cur) !== currentState) break;
+      const dtMs = new Date(cur.polled_at).getTime() - new Date(prev.polled_at).getTime();
+      if (dtMs <= 0 || dtMs >= CONFIG.MAX_GAP_MINUTES * 60_000) break;
+      seconds += dtMs / 1000;
+      i--;
+    }
+    const sinceStart = i === 0 && classify(rows[0]) === currentState;
+    return { seconds, sinceStart };
+  }
+
   function groupByVehicle(rows) {
     const byVehicle = new Map();
     for (const row of rows) {
@@ -57,14 +129,19 @@ const API = (() => {
     return byVehicle;
   }
 
-  // "moving" / "parked" / "idle" / "offline" for one latest-row. Offline
-  // takes priority over speed/geofence - a stale reading tells you nothing
-  // about where the vehicle is now, only where it was last seen.
+  // "moving" / "maintenance" / "parked" / "idle" / "offline" for one
+  // latest-row. Offline takes priority over everything else - a stale
+  // reading tells you nothing about where the vehicle is now. Maintenance
+  // is checked before parked: the two geofences are ~3.4km apart in this
+  // fleet's config so a reading can never legitimately match both, but if
+  // that ever changes, "in for service" is the more decision-relevant
+  // state to surface than "at the yard."
   function classify(row) {
     if (!row.device_datetime) return "offline";
     const ageMin = (Date.now() - new Date(row.device_datetime).getTime()) / 60000;
     if (ageMin > CONFIG.STALE_MINUTES) return "offline";
     if ((row.speed || 0) > 0) return "moving";
+    if (GEO.isWithinMaintenance(row.latitude, row.longitude)) return "maintenance";
     if (GEO.isWithinParking(row.latitude, row.longitude)) return "parked";
     return "idle";
   }
@@ -99,7 +176,7 @@ const API = (() => {
       if (i > 0) {
         const dt =
           new Date(rows[i].polled_at).getTime() - new Date(rows[i - 1].polled_at).getTime();
-        if (dt > 0 && dt < 10 * 60_000) {
+        if (dt > 0 && dt < CONFIG.MAX_GAP_MINUTES * 60_000) {
           // ignore gaps > 10min (offline stretches) so they don't count as idle time
           totalMs += dt;
           if (speed > 0) movingMs += dt;
@@ -145,10 +222,13 @@ const API = (() => {
     fetchLatest,
     fetchHistorySince,
     fetchVehicleHistory,
+    fetchDailyMetrics,
+    fetchMaintenanceVisits,
     groupByVehicle,
     classify,
     ageSeconds,
     vehicleMetrics,
     fleetTimeSeries,
+    stateDurationFromHistory,
   };
 })();

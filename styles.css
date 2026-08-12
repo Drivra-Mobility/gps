@@ -25,6 +25,7 @@
   --state-moving: #2a78d6;
   --state-parked: #1baf7a;
   --state-idle: #eda100;
+  --state-maintenance: #eb6834;
   --state-offline: #898781;
 
   --critical: #d03b3b;
@@ -50,6 +51,7 @@
     --state-moving: #3987e5;
     --state-parked: #199e70;
     --state-idle: #c98500;
+    --state-maintenance: #d95926;
     --state-offline: #898781;
   }
 }
@@ -69,6 +71,7 @@
   --state-moving: #3987e5;
   --state-parked: #199e70;
   --state-idle: #c98500;
+  --state-maintenance: #d95926;
   --state-offline: #898781;
 }
 
@@ -249,7 +252,8 @@ h2 {
 }
 select,
 input[type="text"],
-input[type="number"] {
+input[type="number"],
+input[type="date"] {
   font: inherit;
   font-size: 13px;
   padding: 6px 10px;
@@ -331,6 +335,10 @@ input[type="number"] {
 }
 .swatch-idle {
   background: var(--state-idle);
+}
+.swatch-maintenance {
+  background: var(--state-maintenance);
+  transform: rotate(45deg);
 }
 .swatch-offline {
   background: transparent;
@@ -429,6 +437,11 @@ input[type="number"] {
 }
 .dot-idle {
   background: var(--state-idle);
+}
+.dot-maintenance {
+  background: var(--state-maintenance);
+  border-radius: 2px;
+  transform: rotate(45deg);
 }
 .dot-offline {
   background: transparent;
@@ -629,6 +642,11 @@ tbody tr:hover {
 .state-idle::before {
   background: var(--state-idle);
 }
+.state-maintenance::before {
+  background: var(--state-maintenance);
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
 .state-offline::before {
   border: 1.5px dashed var(--state-offline);
 }
@@ -642,6 +660,23 @@ tbody tr:hover {
 .marker svg {
   display: block;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+  transition: transform 0.2s ease;
+}
+/* Briefly draws the eye to a marker whose state just changed (left parking,
+   entered maintenance, etc.) - tasteful motion, not a persistent badge. */
+@keyframes marker-pulse {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.7);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.marker-pulse svg {
+  animation: marker-pulse 1.6s ease-out;
 }
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
@@ -693,5 +728,95 @@ tbody tr:hover {
   opacity: 0.5;
 }
 .foot .is-error {
+  color: var(--critical);
+}
+
+/* ---------- analytics: leaderboards ---------- */
+
+.leaderboards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+.leaderboard {
+  padding: 14px 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.leaderboard h2 {
+  margin: 0;
+  font-size: 13px;
+}
+.leaderboard-caption {
+  margin: 2px 0 10px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.leaderboard-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.leaderboard-row:last-child {
+  border-bottom: none;
+}
+.leaderboard-rank {
+  flex: none;
+  width: 1.4em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.leaderboard-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.leaderboard-value {
+  flex: none;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.leaderboard-value.is-alerting {
+  color: var(--critical);
+}
+.leaderboard-empty {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---------- analytics: on-demand report panels ---------- */
+
+.report-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
+}
+.report-panel[hidden] {
+  display: none;
+}
+.card-body {
+  padding: 14px 16px;
+}
+.controls-plain {
+  margin-bottom: 0;
+  padding: 0;
+  border: none;
+}
+.delta-good {
+  color: var(--state-parked);
+}
+.delta-bad {
   color: var(--critical);
 }

@@ -20,6 +20,7 @@
       </div>
       <div class="topbar-right">
         <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
+        <a href="analytics.html" class="btn btn-quiet">Analytics</a>
         <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
           Theme
         </button>
@@ -59,6 +60,11 @@
         <h2><span class="swatch swatch-moving" aria-hidden="true"></span>Moving</h2>
         <p class="kpi-value" id="kpi-moving">—</p>
         <p class="kpi-note">speed above zero</p>
+      </article>
+      <article class="kpi">
+        <h2><span class="swatch swatch-maintenance" aria-hidden="true"></span>In maintenance</h2>
+        <p class="kpi-value" id="kpi-maintenance">—</p>
+        <p class="kpi-note">within the maintenance geofence</p>
       </article>
       <article class="kpi">
         <h2><span class="swatch swatch-parked" aria-hidden="true"></span>In parking</h2>
@@ -101,6 +107,7 @@
           <h2>Live positions</h2>
           <ul class="legend" id="map-legend">
             <li><span class="dot dot-moving" aria-hidden="true"></span>Moving</li>
+            <li><span class="dot dot-maintenance" aria-hidden="true"></span>In maintenance</li>
             <li><span class="dot dot-parked" aria-hidden="true"></span>In parking</li>
             <li><span class="dot dot-idle" aria-hidden="true"></span>Idle</li>
             <li><span class="dot dot-offline" aria-hidden="true"></span>Offline</li>

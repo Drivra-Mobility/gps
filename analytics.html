@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Analytics — Fleet dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="breadcrumb"><a href="index.html">← Fleet dashboard</a></p>
+        <h1>Analytics</h1>
+        <p class="sub">Business insights across the fleet — where time is being spent, and where it's being wasted.</p>
+      </div>
+      <div class="topbar-right">
+        <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+          Theme
+        </button>
+        <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Filters">
+      <div class="control">
+        <label for="range-start">From</label>
+        <input id="range-start" type="date" />
+      </div>
+      <div class="control">
+        <label for="range-end">To</label>
+        <input id="range-end" type="date" />
+      </div>
+      <div class="control">
+        <label for="vehicle-filter">Vehicle (day table only)</label>
+        <select id="vehicle-filter">
+          <option value="">All vehicles</option>
+        </select>
+      </div>
+    </section>
+    <p class="hint">
+      Leaderboards below always cover the whole fleet, regardless of the vehicle filter. Widening
+      the date range too far can hit Supabase's row-return cap on a large fleet — see the "Run
+      report" tools further down for ranges wider than a couple of weeks.
+    </p>
+
+    <section class="leaderboards" aria-label="Leaderboards">
+      <article class="leaderboard">
+        <h2>Biggest optimisation opportunities</h2>
+        <p class="leaderboard-caption">Most idle + maintenance time this period — start here.</p>
+        <div class="leaderboard-list" id="lb-opportunity"></div>
+      </article>
+      <article class="leaderboard">
+        <h2>Longest in maintenance right now</h2>
+        <p class="leaderboard-caption">Vehicles currently in an ongoing maintenance visit.</p>
+        <div class="leaderboard-list" id="lb-maintenance-now"></div>
+      </article>
+      <article class="leaderboard">
+        <h2>Lowest utilisation</h2>
+        <p class="leaderboard-caption">Moving time as a share of tracked time, this period.</p>
+        <div class="leaderboard-list" id="lb-utilisation"></div>
+      </article>
+      <article class="leaderboard">
+        <h2>Latest morning departures</h2>
+        <p class="leaderboard-caption">Average time of first departure from parking. Days with none observed are excluded, not counted as zero.</p>
+        <div class="leaderboard-list" id="lb-departure"></div>
+      </article>
+      <article class="leaderboard">
+        <h2>Parked-overnight compliance</h2>
+        <p class="leaderboard-caption">Share of nights each vehicle was seen parked overnight.</p>
+        <div class="leaderboard-list" id="lb-overnight"></div>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>Distance per day</h2>
+          <p class="card-sub">fleet total, moving-time hops only</p>
+        </header>
+        <div class="chart-wrap chart-wrap-sm">
+          <svg id="chart-distance-day" class="chart-svg" data-tip="tip-distance-day" role="img" aria-label="Fleet distance per day"></svg>
+          <div id="tip-distance-day" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>Utilisation per day</h2>
+          <p class="card-sub">fleet-wide moving time ÷ tracked time</p>
+        </header>
+        <div class="chart-wrap chart-wrap-sm">
+          <svg id="chart-utilisation-day" class="chart-svg" data-tip="tip-utilisation-day" role="img" aria-label="Fleet utilisation per day"></svg>
+          <div id="tip-utilisation-day" class="tip" hidden></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>On-demand reports</h2>
+        <p class="card-sub">Wider or heavier analyses, run only when you ask for them.</p>
+      </header>
+      <div class="card-body">
+        <div class="controls controls-plain">
+          <div class="control">
+            <span class="control-label">Compare periods</span>
+            <button id="run-compare" class="btn btn-primary" type="button">Compare to previous period</button>
+          </div>
+          <div class="control">
+            <label for="deep-dive-vehicle">Vehicle deep-dive</label>
+            <select id="deep-dive-vehicle">
+              <option value="">Choose a vehicle…</option>
+            </select>
+          </div>
+          <div class="control">
+            <label for="deep-dive-days">Look back</label>
+            <select id="deep-dive-days">
+              <option value="30">30 days</option>
+              <option value="90" selected>90 days</option>
+              <option value="180">180 days</option>
+            </select>
+          </div>
+          <div class="control">
+            <span class="control-label">&nbsp;</span>
+            <button id="run-deep-dive" class="btn btn-primary" type="button">Run deep-dive</button>
+          </div>
+        </div>
+
+        <div class="report-panel" id="compare-panel" hidden>
+          <h3>Previous period comparison</h3>
+          <p class="card-sub" id="compare-sub"></p>
+          <div class="table-wrap">
+            <table id="compare-table">
+              <thead>
+                <tr>
+                  <th scope="col">Vehicle</th>
+                  <th scope="col" class="num">Utilisation Δ</th>
+                  <th scope="col" class="num">Distance Δ</th>
+                  <th scope="col" class="num">Maintenance Δ</th>
+                </tr>
+              </thead>
+              <tbody id="compare-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="report-panel" id="deep-dive-panel" hidden>
+          <h3 id="deep-dive-title">Vehicle deep-dive</h3>
+          <div class="kpis kpis-activity" id="deep-dive-kpis"></div>
+          <div class="chart-wrap chart-wrap-sm">
+            <svg id="chart-deep-dive" class="chart-svg" data-tip="tip-deep-dive" role="img" aria-label="Vehicle utilisation over time"></svg>
+            <div id="tip-deep-dive" class="tip" hidden></div>
+          </div>
+          <h4>Maintenance visits in range</h4>
+          <div class="table-wrap">
+            <table id="deep-dive-visits-table">
+              <thead>
+                <tr>
+                  <th scope="col">Start</th>
+                  <th scope="col">End</th>
+                  <th scope="col" class="num">Duration</th>
+                </tr>
+              </thead>
+              <tbody id="deep-dive-visits-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Per-vehicle daily breakdown</h2>
+        <p class="card-sub">One row per vehicle per day in range. Click a column to sort.</p>
+      </header>
+      <div class="table-wrap table-wrap-scroll">
+        <table id="day-table">
+          <caption class="visually-hidden">Per-vehicle-per-day analytics, sortable by column</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-sort="local_date" aria-sort="descending">Date</th>
+              <th scope="col" data-sort="vehicle_no">Vehicle</th>
+              <th scope="col" data-sort="moving_seconds" class="num">Runtime</th>
+              <th scope="col" data-sort="idle_seconds" class="num">Idle</th>
+              <th scope="col" data-sort="parked_seconds" class="num">Parked</th>
+              <th scope="col" data-sort="maintenance_seconds" class="num">Maintenance</th>
+              <th scope="col" data-sort="distance_km" class="num">Distance</th>
+              <th scope="col" data-sort="utilization" class="num">Utilisation</th>
+              <th scope="col" data-sort="first_departure_from_parking">First departure</th>
+              <th scope="col" data-sort="parked_overnight">Parked overnight</th>
+            </tr>
+          </thead>
+          <tbody id="day-tbody">
+            <tr>
+              <td colspan="10" class="empty">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Recent maintenance visits</h2>
+        <p class="card-sub">Discrete visit episodes — a repair spanning several days is one row, not several.</p>
+      </header>
+      <div class="table-wrap">
+        <table id="visits-table">
+          <caption class="visually-hidden">Recent maintenance visits, sortable by column</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-sort="vehicle_no">Vehicle</th>
+              <th scope="col" data-sort="visit_start">Start</th>
+              <th scope="col" data-sort="visit_end">End</th>
+              <th scope="col" data-sort="duration_seconds" class="num" aria-sort="descending">Duration</th>
+            </tr>
+          </thead>
+          <tbody id="visits-tbody">
+            <tr>
+              <td colspan="4" class="empty">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span id="status">—</span>
+      <span class="foot-sep">·</span>
+      <span>Leaderboards and the day table auto-load; deep reports run on demand</span>
+    </footer>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="chart.js"></script>
+    <script src="auth.js"></script>
+    <script src="api.js"></script>
+    <script src="analytics.js"></script>
+  </body>
+</html>

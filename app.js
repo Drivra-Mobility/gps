@@ -8,8 +8,10 @@
   let grouped = new Map();
   let metrics = new Map(); // imei -> vehicleMetrics()
   let markers = new Map(); // imei -> Leaflet marker
+  let prevStates = new Map(); // imei -> last-rendered classify() state, for the pulse-on-change effect
   let trailLayers = [];
   let map;
+  let geofencesDrawn = false;
   let sortState = { key: "vehicle_no", dir: 1 };
   let loading = false;
 
@@ -30,6 +32,31 @@
     if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
     if (sec < 86400) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m ago`;
     return `${Math.floor(sec / 86400)}d ago`;
+  }
+
+  // Tweens a KPI tile's displayed number from its previous value (stashed on
+  // the element itself) to `to`, so a refresh reads as a count changing
+  // rather than a flat replace. `format` renders the interpolated value at
+  // each frame - pass the same formatter used elsewhere (fmtKm, fmtPct...)
+  // so the animated frames look like the real thing, not a bare number.
+  function animateNumber(el, to, opts = {}) {
+    const { ms = 500, format = (v) => String(Math.round(v)) } = opts;
+    const from = Number(el.dataset.raw || 0);
+    el.dataset.raw = to;
+    if (!Number.isFinite(from) || from === to) {
+      el.textContent = format(to);
+      return;
+    }
+    const t0 = performance.now();
+    function ease(p) {
+      return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    }
+    function tick(now) {
+      const p = Math.min(1, (now - t0) / ms);
+      el.textContent = format(from + (to - from) * ease(p));
+      if (p < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
   }
 
   // ---- theme ----------------------------------------------------------
@@ -70,13 +97,14 @@
     const states = latestRows.map((r) => ({ row: r, state: rowState(r) }));
     const count = (s) => states.filter((x) => x.state === s).length;
 
-    document.getElementById("kpi-total").textContent = latestRows.length;
+    animateNumber(document.getElementById("kpi-total"), latestRows.length);
     document.getElementById("kpi-total-note").textContent = `of ${latestRows.length} vehicles`;
-    document.getElementById("kpi-moving").textContent = count("moving");
-    document.getElementById("kpi-parked").textContent = count("parked");
-    document.getElementById("kpi-idle").textContent = count("idle");
+    animateNumber(document.getElementById("kpi-moving"), count("moving"));
+    animateNumber(document.getElementById("kpi-maintenance"), count("maintenance"));
+    animateNumber(document.getElementById("kpi-parked"), count("parked"));
+    animateNumber(document.getElementById("kpi-idle"), count("idle"));
     const offline = count("offline");
-    document.getElementById("kpi-offline").textContent = offline;
+    animateNumber(document.getElementById("kpi-offline"), offline);
     document.getElementById("kpi-offline-card").classList.toggle("is-alerting", offline > 0);
 
     let totalKm = 0;
@@ -93,9 +121,19 @@
       movingSum += m.movingPct;
       movingN++;
     }
-    document.getElementById("kpi-distance").textContent = fmtKm(totalKm);
-    document.getElementById("kpi-avgspeed").textContent = speedN ? fmtSpeed(speedSum / speedN) : "—";
-    document.getElementById("kpi-utilisation").textContent = movingN ? fmtPct(movingSum / movingN) : "—";
+    animateNumber(document.getElementById("kpi-distance"), totalKm, { format: fmtKm });
+    const avgSpeedEl = document.getElementById("kpi-avgspeed");
+    if (speedN) animateNumber(avgSpeedEl, speedSum / speedN, { format: fmtSpeed });
+    else {
+      avgSpeedEl.textContent = "—";
+      avgSpeedEl.dataset.raw = 0;
+    }
+    const utilEl = document.getElementById("kpi-utilisation");
+    if (movingN) animateNumber(utilEl, movingSum / movingN, { format: fmtPct });
+    else {
+      utilEl.textContent = "—";
+      utilEl.dataset.raw = 0;
+    }
 
     const newest = latestRows
       .map((r) => (r.device_datetime ? new Date(r.device_datetime).getTime() : 0))
@@ -118,6 +156,10 @@
 
   function renderMap() {
     if (!map) map = MAP.init("map");
+    if (!geofencesDrawn) {
+      MAP.addGeofenceCircles(map);
+      geofencesDrawn = true;
+    }
 
     for (const [, layer] of trailLayers) map.removeLayer(layer);
     trailLayers = [];
@@ -139,18 +181,39 @@
     for (const row of latestRows) {
       seen.add(row.imei_no);
       const state = rowState(row);
-      const icon = MAP.iconFor(state, state === "moving" ? headingOf(row) : null);
+      const vehicleType = MAP.vehicleTypeOf(row);
+      const icon = MAP.iconFor(state, state === "moving" ? headingOf(row) : null, vehicleType);
       if (row.latitude == null || row.longitude == null) continue;
+
+      const prevState = prevStates.get(row.imei_no);
       let marker = markers.get(row.imei_no);
+      let justChangedState = false;
       if (!marker) {
         marker = L.marker([row.latitude, row.longitude], { icon }).addTo(map);
         markers.set(row.imei_no, marker);
       } else {
-        marker.setLatLng([row.latitude, row.longitude]);
+        MAP.animateMarkerTo(marker, [row.latitude, row.longitude]);
         marker.setIcon(icon);
+        justChangedState = prevState != null && prevState !== state;
       }
+      prevStates.set(row.imei_no, state);
+      if (justChangedState) {
+        const el = marker.getElement();
+        if (el) {
+          el.classList.remove("marker-pulse");
+          // Force reflow so re-adding the class restarts the animation even
+          // if two state changes land in quick succession.
+          void el.offsetWidth;
+          el.classList.add("marker-pulse");
+        }
+      }
+
+      const stateDuration = API.stateDurationFromHistory(grouped.get(row.imei_no) || [], state);
       marker.bindPopup(
-        MAP.buildPopup(row, state, { link: `vehicle.html?imei=${encodeURIComponent(row.imei_no)}` })
+        MAP.buildPopup(row, state, {
+          link: `vehicle.html?imei=${encodeURIComponent(row.imei_no)}`,
+          stateDuration,
+        })
       );
     }
     for (const [imei, marker] of markers.entries()) {

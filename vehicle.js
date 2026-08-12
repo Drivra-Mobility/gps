@@ -12,6 +12,7 @@
   let marker;
   let trailLine;
   let loading = false;
+  let geofencesDrawn = false;
 
   function fmtKm(km) {
     return `${km.toFixed(km < 10 ? 1 : 0)} km`;
@@ -97,6 +98,10 @@
 
   function renderMap(latest, state) {
     if (!map) map = MAP.init("map", { zoom: 14 });
+    if (!geofencesDrawn) {
+      MAP.addGeofenceCircles(map);
+      geofencesDrawn = true;
+    }
     const pts = rows.filter((r) => r.latitude != null).map((r) => [r.latitude, r.longitude]);
 
     if (trailLine) map.removeLayer(trailLine);
@@ -113,14 +118,16 @@
 
     if (latest.latitude == null) return;
     const angle = Number((latest.raw || {}).Angle);
-    const icon = MAP.iconFor(state, state === "moving" && Number.isFinite(angle) ? angle : null);
+    const vehicleType = MAP.vehicleTypeOf(latest);
+    const icon = MAP.iconFor(state, state === "moving" && Number.isFinite(angle) ? angle : null, vehicleType);
     if (!marker) {
       marker = L.marker([latest.latitude, latest.longitude], { icon }).addTo(map);
     } else {
-      marker.setLatLng([latest.latitude, latest.longitude]);
+      MAP.animateMarkerTo(marker, [latest.latitude, latest.longitude]);
       marker.setIcon(icon);
     }
-    marker.bindPopup(MAP.buildPopup(latest, state));
+    const stateDuration = API.stateDurationFromHistory(rows, state);
+    marker.bindPopup(MAP.buildPopup(latest, state, { stateDuration }));
   }
 
   function renderChart() {
