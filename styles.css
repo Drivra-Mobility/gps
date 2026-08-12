@@ -1,0 +1,697 @@
+/* Fleet dashboard.
+ *
+ * Colour roles come from a validated palette (see supabase/../dashboard/README.md).
+ * Vehicle states use three categorical slots — blue / aqua / yellow — which pass
+ * the all-pairs CVD and normal-vision gates in both light and dark. "Offline" is
+ * deliberately NOT a fourth hue: it is absence of data, drawn in muted ink with a
+ * hollow marker, which also avoids the red-vs-green pair that fails CVD in dark.
+ *
+ * Aqua and yellow sit below 3:1 on the light surface, so every state ships a text
+ * label and a distinct marker shape — colour never carries meaning alone.
+ */
+
+:root {
+  color-scheme: light;
+
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --gridline: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11, 11, 11, 0.1);
+
+  --state-moving: #2a78d6;
+  --state-parked: #1baf7a;
+  --state-idle: #eda100;
+  --state-offline: #898781;
+
+  --critical: #d03b3b;
+
+  --radius: 10px;
+  --gap: 16px;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --gridline: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255, 255, 255, 0.1);
+
+    --state-moving: #3987e5;
+    --state-parked: #199e70;
+    --state-idle: #c98500;
+    --state-offline: #898781;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --gridline: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255, 255, 255, 0.1);
+
+  --state-moving: #3987e5;
+  --state-parked: #199e70;
+  --state-idle: #c98500;
+  --state-offline: #898781;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 20px;
+  background: var(--page);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+h1,
+h2 {
+  margin: 0;
+  font-weight: 600;
+}
+h1 {
+  font-size: 20px;
+}
+h2 {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  margin-bottom: var(--gap);
+}
+.sub {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.freshness {
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-1);
+  white-space: nowrap;
+}
+.freshness.is-stale {
+  color: var(--critical);
+  border-color: var(--critical);
+}
+
+.btn {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+  min-height: 32px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--baseline);
+}
+.btn[aria-pressed="true"] {
+  border-color: var(--state-moving);
+  color: var(--state-moving);
+}
+.btn-quiet {
+  color: var(--text-muted);
+}
+.btn-primary {
+  color: #ffffff;
+  background: var(--state-moving);
+  border-color: var(--state-moving);
+  width: 100%;
+  font-size: 13px;
+  padding: 9px 12px;
+}
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+.btn-primary:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* ---------- auth gate ---------- */
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--page);
+}
+.auth-card {
+  width: min(320px, 90vw);
+  padding: 28px 24px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.auth-card h1 {
+  font-size: 18px;
+}
+.auth-sub {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.auth-card label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.auth-card input {
+  width: 100%;
+}
+.auth-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--critical);
+}
+
+/* ---------- controls ---------- */
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  align-items: flex-start;
+  padding: 14px 16px;
+  margin-bottom: var(--gap);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 150px;
+}
+.control > label,
+.control > .control-label,
+.control > .switch {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+select,
+input[type="text"],
+input[type="number"] {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 10px;
+  min-height: 32px;
+  color: var(--text-primary);
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+/* ---------- KPI tiles ---------- */
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+.kpis-activity {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.kpi-value-text {
+  font-size: 20px;
+}
+.kpi {
+  padding: 14px 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.kpi h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+/* Proportional figures on standalone numbers - tabular-nums makes them loose. */
+.kpi-value {
+  margin: 6px 0 2px;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.kpi-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.kpi-alert.is-alerting {
+  border-color: var(--critical);
+}
+.kpi-alert.is-alerting .kpi-value {
+  color: var(--critical);
+}
+
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+.swatch-moving {
+  background: var(--state-moving);
+}
+.swatch-parked {
+  background: var(--state-parked);
+}
+.swatch-idle {
+  background: var(--state-idle);
+}
+.swatch-offline {
+  background: transparent;
+  border: 1.5px solid var(--state-offline);
+}
+
+/* ---------- cards ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Small multiples: two independent single-axis charts stacked in the grid's
+   second column, never a shared/dual-axis plot (see anti-patterns.md). */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+.stack .card {
+  flex: 1;
+}
+
+.breadcrumb {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+.breadcrumb a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+.breadcrumb a:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: var(--gap);
+}
+.grid .card {
+  margin-bottom: 0;
+}
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px 10px;
+}
+.card-sub {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 60ch;
+}
+
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.dot-moving {
+  background: var(--state-moving);
+}
+.dot-parked {
+  background: var(--state-parked);
+  border-radius: 2px;
+}
+.dot-idle {
+  background: var(--state-idle);
+}
+.dot-offline {
+  background: transparent;
+  border: 1.5px dashed var(--state-offline);
+}
+
+#map {
+  height: 460px;
+  width: 100%;
+  background: var(--page);
+}
+.card-map.is-picking #map {
+  cursor: crosshair;
+}
+
+/* ---------- chart ---------- */
+
+.chart-wrap {
+  position: relative;
+  padding: 0 8px 8px;
+}
+.chart-svg {
+  width: 100%;
+  height: 420px;
+  display: block;
+  overflow: visible;
+}
+.chart-wrap-sm .chart-svg {
+  height: 170px;
+}
+.axis-label {
+  font-size: 10px;
+  fill: var(--text-muted);
+}
+.gridline {
+  stroke: var(--gridline);
+  stroke-width: 1;
+}
+.axis-line {
+  stroke: var(--baseline);
+  stroke-width: 1;
+}
+.series-line {
+  fill: none;
+  stroke: var(--state-moving);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.series-area {
+  fill: var(--state-moving);
+  opacity: 0.1;
+}
+.crosshair {
+  stroke: var(--baseline);
+  stroke-width: 1;
+}
+.focus-dot {
+  fill: var(--state-moving);
+  stroke: var(--surface-1);
+  stroke-width: 2;
+}
+.endpoint-label {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--text-primary);
+}
+
+.tip {
+  position: absolute;
+  pointer-events: none;
+  z-index: 5;
+  padding: 6px 9px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+  white-space: nowrap;
+}
+.tip strong {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- table ---------- */
+
+.table-wrap {
+  overflow-x: auto;
+}
+.table-wrap-scroll {
+  max-height: 460px;
+  overflow-y: auto;
+}
+.table-wrap-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-1);
+  z-index: 1;
+}
+
+/* ---------- extra readings (per-vehicle raw fields) ---------- */
+
+.extra-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--gap);
+  padding: 4px 16px 16px;
+}
+.extra-item {
+  padding: 10px 12px;
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.extra-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.extra-value {
+  margin-top: 3px;
+  font-size: 16px;
+  font-weight: 600;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th,
+td {
+  text-align: left;
+  padding: 9px 16px;
+  border-top: 1px solid var(--gridline);
+  white-space: nowrap;
+}
+thead th {
+  border-top: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+thead th:hover {
+  color: var(--text-primary);
+}
+thead th[aria-sort]::after {
+  content: "↑";
+  margin-left: 5px;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+thead th[aria-sort="descending"]::after {
+  content: "↓";
+}
+/* Columns of numbers align vertically, so tabular figures belong here. */
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+td.location {
+  white-space: normal;
+  min-width: 220px;
+  color: var(--text-secondary);
+}
+tbody tr:hover {
+  background: var(--page);
+}
+.empty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+}
+.state::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+.state-moving::before {
+  background: var(--state-moving);
+}
+.state-parked::before {
+  background: var(--state-parked);
+  border-radius: 2px;
+}
+.state-idle::before {
+  background: var(--state-idle);
+}
+.state-offline::before {
+  border: 1.5px dashed var(--state-offline);
+}
+.state-offline {
+  color: var(--text-muted);
+}
+
+/* ---------- map markers ---------- */
+
+/* Shape differs per state, so identity survives colourblindness and greyscale. */
+.marker svg {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+.leaflet-popup-content {
+  font-family: var(--font);
+  font-size: 12px;
+  margin: 10px 12px;
+}
+.leaflet-popup-content b {
+  font-size: 13px;
+}
+.popup-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.popup-row span:first-child {
+  color: var(--text-secondary);
+}
+.leaflet-popup-content a {
+  color: var(--state-moving);
+}
+.leaflet-container {
+  background: var(--page);
+  font-family: var(--font);
+}
+
+/* ---------- refresh + footer ---------- */
+
+/* Hold the previous render at reduced opacity rather than flashing a skeleton. */
+.is-refreshing .kpis,
+.is-refreshing .card {
+  opacity: 0.65;
+  transition: opacity 0.15s ease;
+}
+
+.foot {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 4px 2px 20px;
+}
+.foot-sep {
+  opacity: 0.5;
+}
+.foot .is-error {
+  color: var(--critical);
+}

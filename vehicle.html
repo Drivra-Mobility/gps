@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vehicle detail — Fleet dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="breadcrumb"><a href="index.html">← Fleet dashboard</a></p>
+        <h1 id="veh-title">Vehicle</h1>
+        <p class="sub" id="veh-sub">—</p>
+      </div>
+      <div class="topbar-right">
+        <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
+        <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+          Theme
+        </button>
+        <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Filters">
+      <div class="control">
+        <label for="window">History window</label>
+        <select id="window">
+          <option value="1">Last 1 hour</option>
+          <option value="3" selected>Last 3 hours</option>
+          <option value="6">Last 6 hours</option>
+          <option value="24">Last 24 hours</option>
+          <option value="72">Last 3 days</option>
+        </select>
+      </div>
+    </section>
+
+    <div id="not-found" class="card" hidden>
+      <p class="empty">No vehicle matches this link, or it hasn't reported yet. Check the URL's
+        <code>?imei=</code> value, or go back to the <a href="index.html">fleet dashboard</a>.</p>
+    </div>
+
+    <div id="veh-content">
+      <section class="kpis" aria-label="Current status">
+        <article class="kpi">
+          <h2>State</h2>
+          <p class="kpi-value kpi-value-text" id="kpi-state">—</p>
+          <p class="kpi-note" id="kpi-state-note">—</p>
+        </article>
+        <article class="kpi">
+          <h2>Speed</h2>
+          <p class="kpi-value" id="kpi-speed">—</p>
+          <p class="kpi-note">current reading</p>
+        </article>
+        <article class="kpi">
+          <h2>Heading</h2>
+          <p class="kpi-value" id="kpi-heading">—</p>
+          <p class="kpi-note">compass direction</p>
+        </article>
+        <article class="kpi">
+          <h2>GPS</h2>
+          <p class="kpi-value kpi-value-text" id="kpi-gps">—</p>
+          <p class="kpi-note" id="kpi-gps-note">satellites</p>
+        </article>
+      </section>
+
+      <section class="kpis kpis-activity" aria-label="Activity in the selected window">
+        <article class="kpi">
+          <h2>Distance travelled</h2>
+          <p class="kpi-value" id="kpi-distance">—</p>
+          <p class="kpi-note">this window</p>
+        </article>
+        <article class="kpi">
+          <h2>Average speed</h2>
+          <p class="kpi-value" id="kpi-avgspeed">—</p>
+          <p class="kpi-note">while moving</p>
+        </article>
+        <article class="kpi">
+          <h2>Top speed</h2>
+          <p class="kpi-value" id="kpi-maxspeed">—</p>
+          <p class="kpi-note">this window</p>
+        </article>
+        <article class="kpi">
+          <h2>Time moving</h2>
+          <p class="kpi-value" id="kpi-movingpct">—</p>
+          <p class="kpi-note">share of this window</p>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="card card-map">
+          <header class="card-head">
+            <h2>Trail</h2>
+            <p class="card-sub">path over the selected window</p>
+          </header>
+          <div id="map" role="application" aria-label="Map of this vehicle's recent path"></div>
+        </article>
+        <article class="card card-chart">
+          <header class="card-head">
+            <h2>Speed</h2>
+            <p class="card-sub">over the selected window</p>
+          </header>
+          <div class="chart-wrap">
+            <svg id="chart-speed" class="chart-svg" data-tip="tip-speed" role="img" aria-label="Speed over time"></svg>
+            <div id="tip-speed" class="tip" hidden></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="card" id="extra-card" hidden>
+        <header class="card-head">
+          <h2>Additional readings</h2>
+          <p class="card-sub">from the device's raw payload, latest report</p>
+        </header>
+        <div class="extra-grid" id="extra-grid"></div>
+      </section>
+
+      <section class="card">
+        <header class="card-head">
+          <h2>Reading history</h2>
+          <p class="card-sub" id="history-sub">every poll in the selected window</p>
+        </header>
+        <div class="table-wrap table-wrap-scroll">
+          <table id="table">
+            <caption class="visually-hidden">Poll-by-poll history for this vehicle</caption>
+            <thead>
+              <tr>
+                <th scope="col">Time</th>
+                <th scope="col">Status</th>
+                <th scope="col" class="num">Speed</th>
+                <th scope="col" class="num">Hop distance</th>
+                <th scope="col">Location</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr>
+                <td colspan="5" class="empty">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <footer class="foot">
+      <span id="status">—</span>
+      <span class="foot-sep">·</span>
+      <span>Auto-refreshes every 60s</span>
+    </footer>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="geo.js"></script>
+    <script src="chart.js"></script>
+    <script src="map.js"></script>
+    <script src="auth.js"></script>
+    <script src="api.js"></script>
+    <script src="vehicle.js"></script>
+  </body>
+</html>

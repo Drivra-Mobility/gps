@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fleet dashboard — YANGOO (CHANDOL)</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Fleet dashboard</h1>
+        <p class="sub">YANGOO (CHANDOL) · ProjectId 49</p>
+      </div>
+      <div class="topbar-right">
+        <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
+        <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+          Theme
+        </button>
+        <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+      </div>
+    </header>
+
+    <!-- One filter row above everything it scopes. The parking geofence is
+         intentionally NOT here - it's a config constant in config.js. -->
+    <section class="controls" aria-label="Filters">
+      <div class="control">
+        <label for="window">History window</label>
+        <select id="window">
+          <option value="1">Last 1 hour</option>
+          <option value="3" selected>Last 3 hours</option>
+          <option value="6">Last 6 hours</option>
+          <option value="24">Last 24 hours</option>
+        </select>
+      </div>
+      <div class="control">
+        <span class="control-label">Trails</span>
+        <label class="switch">
+          <input id="trails" type="checkbox" checked />
+          <span>Show movement paths</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Stat tiles: the number IS the chart. -->
+    <section class="kpis" aria-label="Fleet status">
+      <article class="kpi">
+        <h2>Reporting</h2>
+        <p class="kpi-value" id="kpi-total">—</p>
+        <p class="kpi-note" id="kpi-total-note">of 25 vehicles</p>
+      </article>
+      <article class="kpi">
+        <h2><span class="swatch swatch-moving" aria-hidden="true"></span>Moving</h2>
+        <p class="kpi-value" id="kpi-moving">—</p>
+        <p class="kpi-note">speed above zero</p>
+      </article>
+      <article class="kpi">
+        <h2><span class="swatch swatch-parked" aria-hidden="true"></span>In parking</h2>
+        <p class="kpi-value" id="kpi-parked">—</p>
+        <p class="kpi-note">within the geofence</p>
+      </article>
+      <article class="kpi">
+        <h2><span class="swatch swatch-idle" aria-hidden="true"></span>Idle elsewhere</h2>
+        <p class="kpi-value" id="kpi-idle">—</p>
+        <p class="kpi-note">stopped, outside parking</p>
+      </article>
+      <article class="kpi kpi-alert" id="kpi-offline-card">
+        <h2><span class="swatch swatch-offline" aria-hidden="true"></span>Offline</h2>
+        <p class="kpi-value" id="kpi-offline">—</p>
+        <p class="kpi-note">no report in over 1 hour</p>
+      </article>
+    </section>
+
+    <section class="kpis kpis-activity" aria-label="Fleet activity in the selected window">
+      <article class="kpi">
+        <h2>Distance travelled</h2>
+        <p class="kpi-value" id="kpi-distance">—</p>
+        <p class="kpi-note">fleet total, this window</p>
+      </article>
+      <article class="kpi">
+        <h2>Average speed</h2>
+        <p class="kpi-value" id="kpi-avgspeed">—</p>
+        <p class="kpi-note">while moving, this window</p>
+      </article>
+      <article class="kpi">
+        <h2>Fleet utilisation</h2>
+        <p class="kpi-value" id="kpi-utilisation">—</p>
+        <p class="kpi-note">time spent moving vs. stopped</p>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card card-map">
+        <header class="card-head">
+          <h2>Live positions</h2>
+          <ul class="legend" id="map-legend">
+            <li><span class="dot dot-moving" aria-hidden="true"></span>Moving</li>
+            <li><span class="dot dot-parked" aria-hidden="true"></span>In parking</li>
+            <li><span class="dot dot-idle" aria-hidden="true"></span>Idle</li>
+            <li><span class="dot dot-offline" aria-hidden="true"></span>Offline</li>
+          </ul>
+        </header>
+        <div id="map" role="application" aria-label="Map of current vehicle positions"></div>
+      </article>
+
+      <div class="stack">
+        <article class="card card-chart">
+          <header class="card-head">
+            <h2>Vehicles moving</h2>
+            <p class="card-sub">count over the selected window</p>
+          </header>
+          <div class="chart-wrap chart-wrap-sm">
+            <svg id="chart-moving" class="chart-svg" data-tip="tip-moving" role="img" aria-label="Count of moving vehicles over time"></svg>
+            <div id="tip-moving" class="tip" hidden></div>
+          </div>
+        </article>
+        <article class="card card-chart">
+          <header class="card-head">
+            <h2>Average speed</h2>
+            <p class="card-sub">of moving vehicles, over the window</p>
+          </header>
+          <div class="chart-wrap chart-wrap-sm">
+            <svg id="chart-speed" class="chart-svg" data-tip="tip-speed" role="img" aria-label="Average speed of moving vehicles over time"></svg>
+            <div id="tip-speed" class="tip" hidden></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Top distance travelled</h2>
+        <p class="card-sub">straight-line distance between consecutive polls, this window</p>
+      </header>
+      <div class="chart-wrap">
+        <svg id="chart-distance" class="chart-svg" data-tip="tip-distance" role="img" aria-label="Top vehicles by distance travelled"></svg>
+        <div id="tip-distance" class="tip" hidden></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Vehicles</h2>
+        <p class="card-sub">
+          Every value on the map is also here — sortable, and the accessible equivalent of the
+          map's colour encoding. Click a vehicle for its full detail page.
+        </p>
+      </header>
+      <div class="table-wrap">
+        <table id="table">
+          <caption class="visually-hidden">
+            Current state of each vehicle, sortable by column
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col" data-sort="vehicle_no" aria-sort="ascending">Vehicle</th>
+              <th scope="col" data-sort="state">State</th>
+              <th scope="col" data-sort="speed" class="num">Speed</th>
+              <th scope="col" data-sort="distance" class="num">Distance</th>
+              <th scope="col" data-sort="ageSec" class="num">Last report</th>
+              <th scope="col" data-sort="location">Location</th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr>
+              <td colspan="6" class="empty">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span id="status">—</span>
+      <span class="foot-sep">·</span>
+      <span>Auto-refreshes every 60s</span>
+    </footer>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="geo.js"></script>
+    <script src="chart.js"></script>
+    <script src="map.js"></script>
+    <script src="auth.js"></script>
+    <script src="api.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

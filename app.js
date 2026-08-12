@@ -1,0 +1,326 @@
+// Fleet overview page controller. Loads once the login gate in auth.js
+// confirms a session, then polls Supabase every CONFIG.REFRESH_MS.
+(function () {
+  "use strict";
+
+  let latestRows = [];
+  let historyRows = [];
+  let grouped = new Map();
+  let metrics = new Map(); // imei -> vehicleMetrics()
+  let markers = new Map(); // imei -> Leaflet marker
+  let trailLayers = [];
+  let map;
+  let sortState = { key: "vehicle_no", dir: 1 };
+  let loading = false;
+
+  // ---- formatting ---------------------------------------------------
+
+  function fmtKm(km) {
+    return `${km.toFixed(km < 10 ? 1 : 0)} km`;
+  }
+  function fmtSpeed(kmh) {
+    return `${Math.round(kmh)} km/h`;
+  }
+  function fmtPct(p) {
+    return `${Math.round(p)}%`;
+  }
+  function fmtAge(sec) {
+    if (sec == null) return "never";
+    if (sec < 60) return "just now";
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m ago`;
+    return `${Math.floor(sec / 86400)}d ago`;
+  }
+
+  // ---- theme ----------------------------------------------------------
+
+  function initTheme() {
+    const btn = document.getElementById("theme-toggle");
+    const stored = localStorage.getItem("dashboard-theme");
+    if (stored) document.documentElement.setAttribute("data-theme", stored);
+    btn.addEventListener("click", () => {
+      const current = document.documentElement.getAttribute("data-theme");
+      const next = current === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", next);
+      localStorage.setItem("dashboard-theme", next);
+    });
+  }
+
+  // ---- data loading -----------------------------------------------------
+
+  async function loadAll() {
+    const hours = Number(document.getElementById("window").value);
+    const [latest, history] = await Promise.all([API.fetchLatest(), API.fetchHistorySince(hours)]);
+    latestRows = latest;
+    historyRows = history;
+    grouped = API.groupByVehicle(history);
+    metrics = new Map();
+    for (const [imei, rows] of grouped.entries()) {
+      metrics.set(imei, API.vehicleMetrics(rows));
+    }
+  }
+
+  function rowState(row) {
+    return API.classify(row);
+  }
+
+  // ---- KPIs ---------------------------------------------------------
+
+  function renderKpis() {
+    const states = latestRows.map((r) => ({ row: r, state: rowState(r) }));
+    const count = (s) => states.filter((x) => x.state === s).length;
+
+    document.getElementById("kpi-total").textContent = latestRows.length;
+    document.getElementById("kpi-total-note").textContent = `of ${latestRows.length} vehicles`;
+    document.getElementById("kpi-moving").textContent = count("moving");
+    document.getElementById("kpi-parked").textContent = count("parked");
+    document.getElementById("kpi-idle").textContent = count("idle");
+    const offline = count("offline");
+    document.getElementById("kpi-offline").textContent = offline;
+    document.getElementById("kpi-offline-card").classList.toggle("is-alerting", offline > 0);
+
+    let totalKm = 0;
+    let speedSum = 0;
+    let speedN = 0;
+    let movingSum = 0;
+    let movingN = 0;
+    for (const m of metrics.values()) {
+      totalKm += m.distanceKm;
+      if (m.avgSpeedKmh > 0) {
+        speedSum += m.avgSpeedKmh;
+        speedN++;
+      }
+      movingSum += m.movingPct;
+      movingN++;
+    }
+    document.getElementById("kpi-distance").textContent = fmtKm(totalKm);
+    document.getElementById("kpi-avgspeed").textContent = speedN ? fmtSpeed(speedSum / speedN) : "—";
+    document.getElementById("kpi-utilisation").textContent = movingN ? fmtPct(movingSum / movingN) : "—";
+
+    const newest = latestRows
+      .map((r) => (r.device_datetime ? new Date(r.device_datetime).getTime() : 0))
+      .reduce((a, b) => Math.max(a, b), 0);
+    const freshEl = document.getElementById("freshness");
+    if (newest) {
+      const ageSec = (Date.now() - newest) / 1000;
+      freshEl.textContent = `newest report: ${fmtAge(ageSec)}`;
+      freshEl.classList.toggle("is-stale", ageSec > CONFIG.STALE_MINUTES * 60);
+    }
+  }
+
+  // ---- map ------------------------------------------------------------
+
+  function headingOf(row) {
+    const raw = row.raw || {};
+    const angle = Number(raw.Angle);
+    return Number.isFinite(angle) ? angle : null;
+  }
+
+  function renderMap() {
+    if (!map) map = MAP.init("map");
+
+    for (const [, layer] of trailLayers) map.removeLayer(layer);
+    trailLayers = [];
+    const showTrails = document.getElementById("trails").checked;
+    if (showTrails) {
+      for (const [imei, rows] of grouped.entries()) {
+        const pts = rows.filter((r) => r.latitude != null).map((r) => [r.latitude, r.longitude]);
+        if (pts.length < 2) continue;
+        const line = L.polyline(pts, {
+          color: getComputedStyle(document.documentElement).getPropertyValue("--baseline").trim(),
+          weight: 2,
+          opacity: 0.6,
+        }).addTo(map);
+        trailLayers.push([imei, line]);
+      }
+    }
+
+    const seen = new Set();
+    for (const row of latestRows) {
+      seen.add(row.imei_no);
+      const state = rowState(row);
+      const icon = MAP.iconFor(state, state === "moving" ? headingOf(row) : null);
+      if (row.latitude == null || row.longitude == null) continue;
+      let marker = markers.get(row.imei_no);
+      if (!marker) {
+        marker = L.marker([row.latitude, row.longitude], { icon }).addTo(map);
+        markers.set(row.imei_no, marker);
+      } else {
+        marker.setLatLng([row.latitude, row.longitude]);
+        marker.setIcon(icon);
+      }
+      marker.bindPopup(
+        MAP.buildPopup(row, state, { link: `vehicle.html?imei=${encodeURIComponent(row.imei_no)}` })
+      );
+    }
+    for (const [imei, marker] of markers.entries()) {
+      if (!seen.has(imei)) {
+        map.removeLayer(marker);
+        markers.delete(imei);
+      }
+    }
+  }
+
+  // ---- charts -----------------------------------------------------------
+
+  function renderCharts() {
+    const series = API.fleetTimeSeries(historyRows);
+    CHART.lineChart(
+      document.getElementById("chart-moving"),
+      series.map((s) => ({ x: s.t, y: s.movingCount })),
+      { valueLabel: (v) => String(Math.round(v)), tipTitle: "Moving" }
+    );
+    CHART.lineChart(
+      document.getElementById("chart-speed"),
+      series.map((s) => ({ x: s.t, y: s.avgSpeed })),
+      { valueLabel: (v) => `${Math.round(v)} km/h`, tipTitle: "Avg speed", color: "var(--state-idle)" }
+    );
+
+    const byVehicle = new Map(latestRows.map((r) => [r.imei_no, r.vehicle_no || r.imei_no]));
+    const distanceData = [...metrics.entries()]
+      .filter(([, m]) => m.distanceKm > 0)
+      .map(([imei, m]) => ({ label: byVehicle.get(imei) || imei, value: m.distanceKm }));
+    CHART.barChart(document.getElementById("chart-distance"), distanceData, {
+      valueLabel: (v) => v.toFixed(1),
+      tipUnit: "km",
+    });
+  }
+
+  // ---- table --------------------------------------------------------
+
+  function tableRows() {
+    return latestRows.map((row) => {
+      const state = rowState(row);
+      const m = metrics.get(row.imei_no) || { distanceKm: 0 };
+      return {
+        imei: row.imei_no,
+        vehicle_no: row.vehicle_no || row.imei_no,
+        state,
+        speed: row.speed || 0,
+        distance: m.distanceKm,
+        ageSec: API.ageSeconds(row.device_datetime),
+        location: row.location || "—",
+      };
+    });
+  }
+
+  function sortRows(rows) {
+    const { key, dir } = sortState;
+    return [...rows].sort((a, b) => {
+      let av = a[key];
+      let bv = b[key];
+      if (key === "ageSec") {
+        av = av == null ? Infinity : av;
+        bv = bv == null ? Infinity : bv;
+      }
+      if (typeof av === "string") return dir * av.localeCompare(bv);
+      return dir * ((av ?? 0) - (bv ?? 0));
+    });
+  }
+
+  function renderTable() {
+    const tbody = document.getElementById("tbody");
+    const rows = sortRows(tableRows());
+    tbody.innerHTML = "";
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">No vehicles reporting.</td></tr>';
+      return;
+    }
+    for (const r of rows) {
+      const tr = document.createElement("tr");
+
+      const vehTd = document.createElement("td");
+      const link = document.createElement("a");
+      link.href = `vehicle.html?imei=${encodeURIComponent(r.imei)}`;
+      link.textContent = r.vehicle_no;
+      vehTd.appendChild(link);
+
+      const stateTd = document.createElement("td");
+      const stateSpan = document.createElement("span");
+      stateSpan.className = `state state-${r.state}`;
+      stateSpan.textContent = MAP.STATE_LABEL[r.state];
+      stateTd.appendChild(stateSpan);
+
+      const speedTd = document.createElement("td");
+      speedTd.className = "num";
+      speedTd.textContent = r.state === "moving" ? fmtSpeed(r.speed) : "—";
+
+      const distTd = document.createElement("td");
+      distTd.className = "num";
+      distTd.textContent = r.distance > 0 ? fmtKm(r.distance) : "—";
+
+      const ageTd = document.createElement("td");
+      ageTd.className = "num";
+      ageTd.textContent = fmtAge(r.ageSec);
+
+      const locTd = document.createElement("td");
+      locTd.className = "location";
+      locTd.textContent = r.location;
+
+      tr.append(vehTd, stateTd, speedTd, distTd, ageTd, locTd);
+      tbody.appendChild(tr);
+    }
+  }
+
+  function initTableSort() {
+    document.querySelectorAll("th[data-sort]").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.sort;
+        if (sortState.key === key) {
+          sortState.dir *= -1;
+        } else {
+          sortState = { key, dir: 1 };
+        }
+        document.querySelectorAll("th[data-sort]").forEach((h) => h.removeAttribute("aria-sort"));
+        th.setAttribute("aria-sort", sortState.dir === 1 ? "ascending" : "descending");
+        renderTable();
+      });
+    });
+  }
+
+  // ---- orchestration --------------------------------------------------
+
+  function renderAll() {
+    renderKpis();
+    renderMap();
+    renderCharts();
+    renderTable();
+  }
+
+  async function refresh() {
+    if (loading) return;
+    loading = true;
+    const root = document.body;
+    root.classList.add("is-refreshing");
+    const statusEl = document.getElementById("status");
+    try {
+      await loadAll();
+      renderAll();
+      statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+      statusEl.classList.remove("is-error");
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = `Refresh failed: ${err.message || err}`;
+      statusEl.classList.add("is-error");
+    } finally {
+      root.classList.remove("is-refreshing");
+      loading = false;
+    }
+  }
+
+  function start() {
+    document.getElementById("sign-out").hidden = false;
+    document.getElementById("sign-out").addEventListener("click", () => AUTH.signOut());
+    document.getElementById("window").addEventListener("change", refresh);
+    document.getElementById("trails").addEventListener("change", renderMap);
+    initTableSort();
+    refresh();
+    setInterval(refresh, CONFIG.REFRESH_MS);
+    window.addEventListener("resize", () => {
+      if (latestRows.length) renderCharts();
+    });
+  }
+
+  initTheme();
+  AUTH.requireAuth(start);
+})();
