@@ -69,6 +69,11 @@
         <p class="leaderboard-caption">Share of nights each vehicle was seen parked overnight.</p>
         <div class="leaderboard-list" id="lb-overnight"></div>
       </article>
+      <article class="leaderboard">
+        <h2>Most GPS anomalies</h2>
+        <p class="leaderboard-caption">Implausible speed jumps or "moving" readings where the position didn't change — worth a closer look.</p>
+        <div class="leaderboard-list" id="lb-anomalies"></div>
+      </article>
     </section>
 
     <section class="grid">
@@ -192,6 +197,37 @@
           <tbody id="day-tbody">
             <tr>
               <td colspan="10" class="empty">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>GPS anomalies</h2>
+        <p class="card-sub">
+          Internal consistency checks on the position stream — no external data needed. A "GPS
+          jump" is a physically implausible speed between two readings; "frozen while moving" is a
+          vehicle reporting speed but not actually changing position. Either can mean a bad GPS
+          fix, a spoofed feed, or a device fault — treat as a starting point for investigation,
+          not a verdict.
+        </p>
+      </header>
+      <div class="table-wrap table-wrap-scroll">
+        <table id="anomalies-table">
+          <caption class="visually-hidden">GPS anomalies, sortable by column</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-sort="vehicle_no">Vehicle</th>
+              <th scope="col" data-sort="detected_at" aria-sort="descending">Detected</th>
+              <th scope="col" data-sort="kind">Kind</th>
+              <th scope="col">Detail</th>
+            </tr>
+          </thead>
+          <tbody id="anomalies-tbody">
+            <tr>
+              <td colspan="4" class="empty">Loading…</td>
             </tr>
           </tbody>
         </table>

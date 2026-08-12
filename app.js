@@ -146,6 +146,73 @@
     }
   }
 
+  // ---- needs attention -------------------------------------------------
+  // Deliberately built from data this page already fetches every refresh
+  // (latestRows/grouped/metrics) rather than a new query - see analytics.js
+  // for the multi-day equivalents, which do call the dedicated RPCs.
+
+  function fmtDuration(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.round((seconds % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  }
+
+  function renderLeaderboardList(elId, items) {
+    const el = document.getElementById(elId);
+    el.innerHTML = "";
+    if (!items.length) {
+      el.innerHTML = '<p class="leaderboard-empty">Nothing to flag right now.</p>';
+      return;
+    }
+    items.forEach((item, i) => {
+      const row = document.createElement("div");
+      row.className = "leaderboard-row";
+      const rank = document.createElement("span");
+      rank.className = "leaderboard-rank";
+      rank.textContent = `${i + 1}.`;
+      const name = document.createElement("span");
+      name.className = "leaderboard-name";
+      name.textContent = item.name;
+      const value = document.createElement("span");
+      value.className = "leaderboard-value is-alerting";
+      value.textContent = item.value;
+      row.append(rank, name, value);
+      el.appendChild(row);
+    });
+  }
+
+  function renderAttention() {
+    const durations = [];
+    for (const row of latestRows) {
+      const state = rowState(row);
+      if (state !== "idle" && state !== "maintenance") continue;
+      const d = API.stateDurationFromHistory(grouped.get(row.imei_no) || [], state);
+      if (d.seconds <= 0) continue;
+      durations.push({
+        name: row.vehicle_no || row.imei_no,
+        seconds: d.seconds,
+        value: `${fmtDuration(d.seconds)}${d.sinceStart ? "+" : ""} ${state}`,
+      });
+    }
+    durations.sort((a, b) => b.seconds - a.seconds);
+    renderLeaderboardList(
+      "attention-duration",
+      durations.slice(0, 5).map((x) => ({ name: x.name, value: x.value }))
+    );
+
+    const utilisation = [];
+    for (const row of latestRows) {
+      const m = metrics.get(row.imei_no);
+      if (!m || m.points < 2) continue;
+      utilisation.push({ name: row.vehicle_no || row.imei_no, pct: m.movingPct });
+    }
+    utilisation.sort((a, b) => a.pct - b.pct);
+    renderLeaderboardList(
+      "attention-utilisation",
+      utilisation.slice(0, 5).map((x) => ({ name: x.name, value: fmtPct(x.pct) }))
+    );
+  }
+
   // ---- map ------------------------------------------------------------
 
   function headingOf(row) {
@@ -345,6 +412,7 @@
 
   function renderAll() {
     renderKpis();
+    renderAttention();
     renderMap();
     renderCharts();
     renderTable();

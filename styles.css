@@ -820,3 +820,13 @@ tbody tr:hover {
 .delta-bad {
   color: var(--critical);
 }
+.attention-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--gap);
+  padding: 14px 16px;
+}
+.attention-grid h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}

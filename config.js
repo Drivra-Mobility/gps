@@ -86,4 +86,12 @@ const CONFIG = {
     { type: "bike", pattern: /\b(bike|moto|scooter)\b/i },
     { type: "truck", pattern: /\b(truck|lorry)\b/i },
   ],
+
+  // GPS anomaly detection (analytics page). No fraud/tamper signal here
+  // needs an external data source - both are internal consistency checks on
+  // the position stream itself. GUESSES below, tuned for a bike/scooter
+  // delivery fleet in city traffic - raise MAX_PLAUSIBLE_KMH for a fleet
+  // that includes highway trucking.
+  MAX_PLAUSIBLE_KMH: 120, // implied speed above this between two readings = "gps_jump"
+  STUCK_MINUTES: 30, // this long reporting speed>0 with ~no position change = "frozen_while_moving"
 };

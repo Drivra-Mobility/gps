@@ -95,6 +95,25 @@ const API = (() => {
     return data;
   }
 
+  // GPS-jump / frozen-while-moving anomalies - see schema.sql's
+  // vehicle_gps_anomalies(). No external data needed: this flags readings
+  // that are internally inconsistent (implied speed too high to be real, or
+  // "moving" reported while position doesn't change), which is the general
+  // building block for "does the GPS agree with what's being reported"
+  // fraud/tamper signals, independent of any external rides feed.
+  async function fetchAnomalies({ startDate, endDate, imei = null }) {
+    const { data, error } = await AUTH.client.rpc("vehicle_gps_anomalies", {
+      p_start_date: startDate,
+      p_end_date: endDate,
+      p_imei: imei,
+      p_max_plausible_kmh: CONFIG.MAX_PLAUSIBLE_KMH,
+      p_stuck_minutes: CONFIG.STUCK_MINUTES,
+      p_tz: CONFIG.TIMEZONE,
+    });
+    if (error) throw error;
+    return data;
+  }
+
   // How long a vehicle has continuously been in its current classify()
   // state, estimated client-side from whatever history rows are already
   // loaded (no extra query) - walks backward from the latest reading while
@@ -224,6 +243,7 @@ const API = (() => {
     fetchVehicleHistory,
     fetchDailyMetrics,
     fetchMaintenanceVisits,
+    fetchAnomalies,
     groupByVehicle,
     classify,
     ageSeconds,

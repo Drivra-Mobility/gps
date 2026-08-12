@@ -13,8 +13,10 @@
   let dayMetrics = [];
   let ongoingVisits = [];
   let recentVisits = [];
+  let anomalies = [];
   let daySortState = { key: "local_date", dir: -1 };
   let visitsSortState = { key: "duration_seconds", dir: -1 };
+  let anomaliesSortState = { key: "detected_at", dir: -1 };
   let loading = false;
 
   // ---- formatting -------------------------------------------------------
@@ -158,16 +160,18 @@
   async function loadAll() {
     const startDate = document.getElementById("range-start").value;
     const endDate = document.getElementById("range-end").value;
-    const [latest, days, ongoingRaw, recent] = await Promise.all([
+    const [latest, days, ongoingRaw, recent, anomaliesRaw] = await Promise.all([
       API.fetchLatest(),
       API.fetchDailyMetrics({ startDate, endDate }),
       API.fetchMaintenanceVisits({ startDate: null }),
       API.fetchMaintenanceVisits({ startDate }),
+      API.fetchAnomalies({ startDate, endDate }),
     ]);
     latestRows = latest;
     dayMetrics = days;
     ongoingVisits = ongoingRaw.filter((v) => v.is_ongoing);
     recentVisits = recent;
+    anomalies = anomaliesRaw;
 
     populateVehicleSelect(document.getElementById("vehicle-filter"), { includeAll: true });
     populateVehicleSelect(document.getElementById("deep-dive-vehicle"), { includeAll: false });
@@ -267,6 +271,18 @@
       .slice(0, 5)
       .map((x) => ({ name: x.name, value: fmtPct(x.pct), alert: x.pct < 50 }));
     renderLeaderboardList("lb-overnight", overnight);
+
+    // Most GPS anomalies.
+    const anomalyCounts = new Map(); // imei -> { name, count }
+    for (const a of anomalies) {
+      if (!anomalyCounts.has(a.imei_no)) anomalyCounts.set(a.imei_no, { name: a.vehicle_no || a.imei_no, count: 0 });
+      anomalyCounts.get(a.imei_no).count++;
+    }
+    const anomalyBoard = [...anomalyCounts.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+      .map((x) => ({ name: x.name, value: String(x.count), alert: true }));
+    renderLeaderboardList("lb-anomalies", anomalyBoard);
   }
 
   // ---- fleet trend charts -----------------------------------------------
@@ -384,6 +400,43 @@
         td.textContent = text;
         tr.appendChild(td);
       });
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ---- anomalies table ------------------------------------------------
+
+  function anomaliesTableValueOf(row, key) {
+    if (key === "detected_at") return row.detected_at ? new Date(row.detected_at).getTime() : 0;
+    if (key === "vehicle_no") return row.vehicle_no || "";
+    return row[key] ?? "";
+  }
+
+  const ANOMALY_KIND_LABEL = { gps_jump: "GPS jump", frozen_while_moving: "Frozen while moving" };
+
+  function renderAnomaliesTable() {
+    const rows = sortRows(anomalies, anomaliesSortState, anomaliesTableValueOf).slice(0, MAX_TABLE_ROWS);
+    const tbody = document.getElementById("anomalies-tbody");
+    tbody.innerHTML = "";
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">No anomalies detected in this range.</td></tr>';
+      return;
+    }
+    for (const a of rows) {
+      const tr = document.createElement("tr");
+      const vehTd = document.createElement("td");
+      vehTd.textContent = a.vehicle_no || a.imei_no;
+      const whenTd = document.createElement("td");
+      whenTd.textContent = fmtKathmanduDateTime(a.detected_at);
+      const kindTd = document.createElement("td");
+      const kindSpan = document.createElement("span");
+      kindSpan.className = "leaderboard-value is-alerting";
+      kindSpan.textContent = ANOMALY_KIND_LABEL[a.kind] || a.kind;
+      kindTd.appendChild(kindSpan);
+      const detailTd = document.createElement("td");
+      detailTd.className = "location";
+      detailTd.textContent = a.detail || "—";
+      tr.append(vehTd, whenTd, kindTd, detailTd);
       tbody.appendChild(tr);
     }
   }
@@ -575,6 +628,7 @@
     renderCharts();
     renderDayTable();
     renderVisitsTable();
+    renderAnomaliesTable();
   }
 
   async function refresh() {
@@ -618,6 +672,7 @@
 
     initTableSort("#day-table th[data-sort]", daySortState, renderDayTable);
     initTableSort("#visits-table th[data-sort]", visitsSortState, renderVisitsTable);
+    initTableSort("#anomalies-table th[data-sort]", anomaliesSortState, renderAnomaliesTable);
 
     refresh();
     window.addEventListener("resize", () => {
