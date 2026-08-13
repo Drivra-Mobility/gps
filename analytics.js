@@ -14,6 +14,7 @@
   let ongoingVisits = [];
   let recentVisits = [];
   let anomalies = [];
+  let rideMatchMetrics = [];
   let daySortState = { key: "local_date", dir: -1 };
   let visitsSortState = { key: "duration_seconds", dir: -1 };
   let anomaliesSortState = { key: "detected_at", dir: -1 };
@@ -160,18 +161,20 @@
   async function loadAll() {
     const startDate = document.getElementById("range-start").value;
     const endDate = document.getElementById("range-end").value;
-    const [latest, days, ongoingRaw, recent, anomaliesRaw] = await Promise.all([
+    const [latest, days, ongoingRaw, recent, anomaliesRaw, rideMatch] = await Promise.all([
       API.fetchLatest(),
       API.fetchDailyMetrics({ startDate, endDate }),
       API.fetchMaintenanceVisits({ startDate: null }),
       API.fetchMaintenanceVisits({ startDate }),
       API.fetchAnomalies({ startDate, endDate }),
+      API.fetchRideMatchDailyMetrics({ startDate, endDate }),
     ]);
     latestRows = latest;
     dayMetrics = days;
     ongoingVisits = ongoingRaw.filter((v) => v.is_ongoing);
     recentVisits = recent;
     anomalies = anomaliesRaw;
+    rideMatchMetrics = rideMatch;
 
     populateVehicleSelect(document.getElementById("vehicle-filter"), { includeAll: true });
     populateVehicleSelect(document.getElementById("deep-dive-vehicle"), { includeAll: false });
@@ -283,6 +286,25 @@
       .slice(0, 5)
       .map((x) => ({ name: x.name, value: String(x.count), alert: true }));
     renderLeaderboardList("lb-anomalies", anomalyBoard);
+
+    // Lowest ride-corroborated % - mapped vehicles only (mapped_moving_seconds
+    // excludes unmapped time from the denominator, same convention as
+    // drivers.js's misuse review, so an incompletely-mapped fleet doesn't
+    // show falsely-low numbers for vehicles that just aren't mapped yet).
+    const rideByVehicle = new Map(); // imei -> { name, mapped, matched }
+    for (const r of rideMatchMetrics) {
+      if (!rideByVehicle.has(r.imei_no)) rideByVehicle.set(r.imei_no, { name: r.vehicle_no || r.imei_no, mapped: 0, matched: 0 });
+      const v = rideByVehicle.get(r.imei_no);
+      v.mapped += r.mapped_moving_seconds || 0;
+      v.matched += r.ride_matched_seconds || 0;
+    }
+    const rideBoard = [...rideByVehicle.values()]
+      .filter((v) => v.mapped > 0)
+      .map((v) => ({ name: v.name, pct: (100 * v.matched) / v.mapped }))
+      .sort((a, b) => a.pct - b.pct)
+      .slice(0, 5)
+      .map((x) => ({ name: x.name, value: fmtPct(x.pct), alert: x.pct < 50 }));
+    renderLeaderboardList("lb-ride-corroboration", rideBoard);
   }
 
   // ---- fleet trend charts -----------------------------------------------

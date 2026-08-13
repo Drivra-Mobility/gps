@@ -727,7 +727,7 @@ tbody tr:hover {
 .foot-sep {
   opacity: 0.5;
 }
-.foot .is-error {
+.is-error {
   color: var(--critical);
 }
 
@@ -829,4 +829,50 @@ tbody tr:hover {
 .attention-grid h3 {
   margin: 0 0 8px;
   font-size: 13px;
+}
+
+/* ---------- drivers: mapping form + misuse review ---------- */
+
+.risk-high {
+  color: var(--critical);
+  font-weight: 600;
+}
+.risk-medium {
+  color: var(--state-idle);
+  font-weight: 600;
+}
+.risk-low {
+  color: var(--state-parked);
+}
+.risk-unscored {
+  color: var(--text-muted);
+}
+.field-error {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--critical);
+}
+.mapping-row-editing input {
+  width: 100%;
+}
+tbody tr.is-clickable {
+  cursor: pointer;
+}
+tbody tr.is-clickable:hover {
+  background: var(--page);
+}
+tbody tr.is-selected {
+  background: var(--page);
+  box-shadow: inset 3px 0 0 var(--state-moving);
+}
+.table-nested {
+  width: 100%;
+  margin: 6px 0 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-collapse: collapse;
+}
+.table-nested td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
 }

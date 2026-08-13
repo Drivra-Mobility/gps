@@ -94,4 +94,39 @@ const CONFIG = {
   // that includes highway trucking.
   MAX_PLAUSIBLE_KMH: 120, // implied speed above this between two readings = "gps_jump"
   STUCK_MINUTES: 30, // this long reporting speed>0 with ~no position change = "frozen_while_moving"
+
+  // Vehicle <-> driver mapping + Yango ride-corroboration ("misuse
+  // detection", drivers.html). Cross-references GPS movement against
+  // Yango ride records (synced by a separate app, yapigo, into this same
+  // Supabase project's drivers/orders tables) via vehicle_ride_match_day_metrics/
+  // vehicle_ride_segments (see schema.sql).
+  //
+  // RIDE_MATCH_TOLERANCE_MINUTES: padding on each side of a Yango order's
+  // [booked_at, ended_at] window when checking whether a movement segment
+  // overlaps it - covers clock skew and plausible pre-pickup/post-dropoff
+  // movement.
+  RIDE_MATCH_TOLERANCE_MINUTES: 10,
+  // RIDE_MATCH_PENDING_GRACE_MINUTES: a movement segment ending more
+  // recently than this is "pending," not "unmatched," regardless of
+  // whether a match was found - covers Yango's own sync interval into
+  // yapigo (~15 minutes) plus processing slack. Don't lower this below
+  // that sync interval or freshly-finished legitimate rides will read as
+  // misuse before their order has even landed.
+  RIDE_MATCH_PENDING_GRACE_MINUTES: 20,
+
+  // Confidence-score heuristic (drivers.js's computeConfidenceScore()) -
+  // a transparent, hand-tunable set of thresholds in the same spirit as
+  // MAX_PLAUSIBLE_KMH/STUCK_MINUTES above: guessed and documented, not
+  // derived, meant to be retuned once real flagged-vs-confirmed cases
+  // accumulate.
+  MISUSE_LOOKBACK_DAYS: 30, // default trailing window fetched for scoring; 30/45/60 selectable
+  MISUSE_RECENT_WINDOW_DAYS: 7, // the "did something change recently" window within the lookback
+  MISUSE_MIN_MAPPED_SECONDS_RECENT: 1800, // below this much mapped moving time in the recent window, score reads "Insufficient data"
+  MISUSE_MIN_DAY_MAPPED_SECONDS: 300, // a day needs at least this much mapped moving time to count toward the persistence check
+  MISUSE_FLAG_DAY_RATE_THRESHOLD: 0.1, // a day's unmatched share above this counts as a "flagged day" for persistence
+  MISUSE_MAX_EXPECTED_DELTA: 0.4, // recent-vs-baseline unmatched-rate delta that maps to a full-strength magnitude score
+  MISUSE_TARGET_SEGMENT_SECONDS: 300, // unmatched segments averaging this long or more get full weight; shorter/noisier ones scale the score down
+  MISUSE_SCORE_WEIGHTS: { magnitude: 0.5, persistence: 0.3, level: 0.2 },
+  MISUSE_TIER_HIGH: 60,
+  MISUSE_TIER_MEDIUM: 25,
 };

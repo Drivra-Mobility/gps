@@ -114,6 +114,100 @@ const API = (() => {
     return data;
   }
 
+  // Vehicle <-> driver phone mapping - full history (current + past), not
+  // just today's assignment. drivers.js splits current (valid_to is null)
+  // from history client-side.
+  async function fetchVehicleDriverMappings() {
+    const { data, error } = await AUTH.client
+      .from("vehicle_driver_mapping")
+      .select("*")
+      .order("imei_no")
+      .order("valid_from", { ascending: false });
+    if (error) throw error;
+    return data;
+  }
+
+  // Atomically closes any current mapping for imei and opens a new one (or,
+  // if the phone is unchanged, updates driver_name/note in place) - see
+  // schema.sql's set_vehicle_driver(). phone null/"" unassigns.
+  async function setVehicleDriver({ imei, phone, driverName = null, note = null }) {
+    const { data, error } = await AUTH.client.rpc("set_vehicle_driver", {
+      p_imei: imei,
+      p_phone: phone,
+      p_driver_name: driverName,
+      p_note: note,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  // Exact-match driver lookup by phone - powers the mapping form's
+  // "auto-suggest a name once a valid phone is entered."
+  async function lookupDriverByPhone(phone) {
+    const { data, error } = await AUTH.client.rpc("lookup_driver_by_phone", { p_phone: phone });
+    if (error) throw error;
+    return data[0] || null;
+  }
+
+  // Per-vehicle-per-day ride-corroboration rollup - see schema.sql's
+  // vehicle_ride_match_day_metrics(). Same CONFIG-sourced geofence/tz/gap
+  // params as fetchDailyMetrics(), so the two compose (join client-side on
+  // imei_no + local_date) without re-fetching anything.
+  async function fetchRideMatchDailyMetrics({ startDate, endDate, imei = null }) {
+    const { data, error } = await AUTH.client.rpc("vehicle_ride_match_day_metrics", {
+      p_start_date: startDate,
+      p_end_date: endDate,
+      p_park_lat: CONFIG.PARK_CENTER.lat,
+      p_park_lon: CONFIG.PARK_CENTER.lon,
+      p_park_radius_m: CONFIG.PARK_RADIUS_M,
+      p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
+      p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
+      p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
+      p_imei: imei,
+      p_max_gap_minutes: CONFIG.MAX_GAP_MINUTES,
+      p_ride_tolerance_minutes: CONFIG.RIDE_MATCH_TOLERANCE_MINUTES,
+      p_pending_grace_minutes: CONFIG.RIDE_MATCH_PENDING_GRACE_MINUTES,
+      p_tz: CONFIG.TIMEZONE,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  // On-demand, single-vehicle segment drill-down - see schema.sql's
+  // vehicle_ride_segments(). Requires imei (no "all vehicles" mode),
+  // mirrors analytics.js's deep-dive report pattern - not auto-loaded.
+  async function fetchVehicleRideSegments({ imei, startDate, endDate }) {
+    const { data, error } = await AUTH.client.rpc("vehicle_ride_segments", {
+      p_start_date: startDate,
+      p_end_date: endDate,
+      p_park_lat: CONFIG.PARK_CENTER.lat,
+      p_park_lon: CONFIG.PARK_CENTER.lon,
+      p_park_radius_m: CONFIG.PARK_RADIUS_M,
+      p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
+      p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
+      p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
+      p_imei: imei,
+      p_max_gap_minutes: CONFIG.MAX_GAP_MINUTES,
+      p_ride_tolerance_minutes: CONFIG.RIDE_MATCH_TOLERANCE_MINUTES,
+      p_pending_grace_minutes: CONFIG.RIDE_MATCH_PENDING_GRACE_MINUTES,
+      p_tz: CONFIG.TIMEZONE,
+    });
+    if (error) throw error;
+    return data;
+  }
+
+  // Restricted read into the mapped fleet's Yango ride history - name/
+  // phone/ride times/category only (see schema.sql's fleet_driver_orders
+  // view; no price or payment method, by design).
+  async function fetchDriverRides({ phone, startDate = null, endDate = null }) {
+    let q = AUTH.client.from("fleet_driver_orders").select("*").eq("phone", phone);
+    if (startDate) q = q.gte("booked_at", `${startDate}T00:00:00`);
+    if (endDate) q = q.lte("ended_at", `${endDate}T23:59:59`);
+    const { data, error } = await q.order("booked_at", { ascending: false });
+    if (error) throw error;
+    return data;
+  }
+
   // How long a vehicle has continuously been in its current classify()
   // state, estimated client-side from whatever history rows are already
   // loaded (no extra query) - walks backward from the latest reading while
@@ -244,6 +338,12 @@ const API = (() => {
     fetchDailyMetrics,
     fetchMaintenanceVisits,
     fetchAnomalies,
+    fetchVehicleDriverMappings,
+    setVehicleDriver,
+    lookupDriverByPhone,
+    fetchRideMatchDailyMetrics,
+    fetchVehicleRideSegments,
+    fetchDriverRides,
     groupByVehicle,
     classify,
     ageSeconds,

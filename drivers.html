@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Drivers — Fleet dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="breadcrumb"><a href="index.html">← Fleet dashboard</a></p>
+        <h1>Drivers</h1>
+        <p class="sub">Map each vehicle to a driver's phone number, then see whether movement is backed by an actual Yango ride.</p>
+      </div>
+      <div class="topbar-right">
+        <a href="analytics.html" class="btn btn-quiet">Analytics</a>
+        <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+          Theme
+        </button>
+        <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+      </div>
+    </header>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Vehicle ↔ driver mapping</h2>
+        <p class="card-sub">
+          Phone must be in <code>+977XXXXXXXXXX</code> format to match Yango's own records. A
+          vehicle's driver history is preserved — reassigning opens a new record rather than
+          overwriting the old one, so past movement is still checked against whoever was actually
+          responsible for it at the time.
+        </p>
+      </header>
+      <div class="table-wrap">
+        <table id="mapping-table">
+          <caption class="visually-hidden">Vehicle to driver phone mapping</caption>
+          <thead>
+            <tr>
+              <th scope="col">Vehicle</th>
+              <th scope="col">Driver</th>
+              <th scope="col">Phone</th>
+              <th scope="col">Mapped since</th>
+              <th scope="col"></th>
+            </tr>
+          </thead>
+          <tbody id="mapping-tbody">
+            <tr>
+              <td colspan="5" class="empty">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Misuse review</h2>
+        <p class="card-sub">
+          Vehicles ranked by how much recent movement isn't backed by a Yango ride, weighed against
+          each vehicle's own history — not just a raw unmatched total. Movement that starts or ends
+          near the parking or maintenance geofence is treated as explained (a plausible
+          repositioning/errand trip), not counted against a vehicle. Unmatched movement may also
+          include a Yango ride that was dispatched and then cancelled — those aren't stored today,
+          so they can't be distinguished from genuine unmatched movement. Treat this as a starting
+          point for investigation, not a verdict.
+        </p>
+      </header>
+      <div class="card-body">
+        <div class="controls controls-plain">
+          <div class="control">
+            <label for="misuse-lookback">Lookback</label>
+            <select id="misuse-lookback">
+              <option value="30" selected>30 days</option>
+              <option value="45">45 days</option>
+              <option value="60">60 days</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint is-error" id="misuse-truncation-warning" hidden>
+          This response came back at the row cap and may be truncated — narrow the lookback for a
+          complete picture.
+        </p>
+
+        <div class="table-wrap table-wrap-scroll">
+          <table id="misuse-table">
+            <caption class="visually-hidden">Vehicles ranked by misuse confidence score</caption>
+            <thead>
+              <tr>
+                <th scope="col">Vehicle</th>
+                <th scope="col">Driver</th>
+                <th scope="col">Risk</th>
+                <th scope="col" class="num">Ride-corroborated</th>
+                <th scope="col" class="num">Unmatched</th>
+                <th scope="col" class="num">Explained (near base)</th>
+                <th scope="col" class="num">Unmapped</th>
+              </tr>
+            </thead>
+            <tbody id="misuse-tbody">
+              <tr>
+                <td colspan="7" class="empty">Loading…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="report-panel" id="misuse-detail-panel" hidden>
+          <h3 id="misuse-detail-title">Vehicle detail</h3>
+          <p class="card-sub" id="misuse-detail-sub"></p>
+
+          <h4>Movement segments</h4>
+          <div class="table-wrap table-wrap-scroll">
+            <table id="misuse-segments-table">
+              <caption class="visually-hidden">Movement segments for the selected vehicle</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Start</th>
+                  <th scope="col">End</th>
+                  <th scope="col" class="num">Duration</th>
+                  <th scope="col" class="num">Distance</th>
+                  <th scope="col">Classification</th>
+                </tr>
+              </thead>
+              <tbody id="misuse-segments-tbody"></tbody>
+            </table>
+          </div>
+
+          <h4>Recent Yango rides</h4>
+          <div class="table-wrap">
+            <table id="misuse-rides-table">
+              <caption class="visually-hidden">Recent Yango rides for the selected driver</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Start</th>
+                  <th scope="col">End</th>
+                  <th scope="col">Category</th>
+                </tr>
+              </thead>
+              <tbody id="misuse-rides-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span id="status">—</span>
+      <span class="foot-sep">·</span>
+      <span>Mapping table and misuse review auto-load; click a vehicle row for detail</span>
+    </footer>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    <script src="api.js"></script>
+    <script src="drivers.js"></script>
+  </body>
+</html>
