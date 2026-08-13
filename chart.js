@@ -219,14 +219,18 @@ const CHART = (() => {
   }
 
   // ---- Horizontal bar chart ----------------------------------------------
-  // data: [{label: string, value: number}], any order (chart sorts desc).
+  // data: [{label: string, value: number}], any order (chart sorts desc by
+  // default - pass ascending:true for "worst/lowest first" rankings, e.g.
+  // utilisation or compliance percentages where a small bar is the one that
+  // needs attention).
   function barChart(svg, data, opts) {
-    const { valueLabel = (v) => String(Math.round(v)), tipUnit = "", color } = opts;
+    const { valueLabel = (v) => String(Math.round(v)), tipUnit = "", color, ascending = false } = opts;
     svg.innerHTML = "";
     const rootStyle = getComputedStyle(document.documentElement);
     const barColor = color || rootStyle.getPropertyValue("--state-moving").trim();
 
-    const sorted = [...data].sort((a, b) => b.value - a.value).slice(0, 10);
+    const sortFn = ascending ? (a, b) => a.value - b.value : (a, b) => b.value - a.value;
+    const sorted = [...data].sort(sortFn).slice(0, 10);
     const width = svg.clientWidth || 600;
     const barH = 20;
     const gap = 10;

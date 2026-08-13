@@ -39,106 +39,13 @@
       </div>
     </section>
     <p class="hint">
-      Leaderboards below always cover the whole fleet, regardless of the vehicle filter. Widening
-      the date range too far can hit Supabase's row-return cap on a large fleet — see the "Run
-      report" tools further down for ranges wider than a couple of weeks.
+      Charts below always cover the whole fleet, regardless of the vehicle filter. Widening the
+      date range too far can hit Supabase's row-return cap on a large fleet — see the "Run report"
+      tools further down for ranges wider than a couple of weeks.
     </p>
 
-    <section class="leaderboards" aria-label="Leaderboards">
-      <article class="leaderboard">
-        <h2>
-          Biggest optimisation opportunities
-          <span
-            class="info-tip"
-            tabindex="0"
-            data-tooltip="Sum of idle + maintenance seconds across the whole selected date range, per vehicle. This is a total, not a rate — a vehicle reporting for more days can rank higher even at a perfectly normal idle rate."
-            aria-label="Sum of idle + maintenance seconds across the selected date range, per vehicle. A total, not a rate."
-          ></span>
-        </h2>
-        <p class="leaderboard-caption">Most idle + maintenance time this period — start here.</p>
-        <div class="leaderboard-list" id="lb-opportunity"></div>
-      </article>
-      <article class="leaderboard">
-        <h2>
-          Longest in maintenance right now
-          <span
-            class="info-tip"
-            tabindex="0"
-            data-tooltip="Vehicles currently mid-visit (haven't left the maintenance geofence yet), ranked by how long the current visit has run so far. Independent of the date range above — this is about right now, not the selected period."
-            aria-label="Vehicles currently mid-visit, ranked by how long the current visit has run so far. Independent of the date range above."
-          ></span>
-        </h2>
-        <p class="leaderboard-caption">Vehicles currently in an ongoing maintenance visit.</p>
-        <div class="leaderboard-list" id="lb-maintenance-now"></div>
-      </article>
-      <article class="leaderboard">
-        <h2>
-          Lowest utilisation
-          <span
-            class="info-tip"
-            tabindex="0"
-            data-tooltip="Each vehicle's own total moving seconds ÷ total tracked seconds, summed across the whole selected date range — a per-vehicle rate. Different from the 'Utilisation per day' chart below, which is a fleet-wide daily rate, not per vehicle."
-            aria-label="Each vehicle's total moving seconds divided by total tracked seconds across the whole date range - a per-vehicle rate, different from the fleet-wide daily chart below."
-          ></span>
-        </h2>
-        <p class="leaderboard-caption">Moving time as a share of tracked time, this period.</p>
-        <div class="leaderboard-list" id="lb-utilisation"></div>
-      </article>
-      <article class="leaderboard">
-        <h2>
-          Latest morning departures
-          <span
-            class="info-tip"
-            tabindex="0"
-            data-tooltip="Average local time of the first observed transition from inside the parking geofence to outside it, across days where one actually happened. Days with none observed are excluded from the average entirely, not treated as a late (or zero) departure."
-            aria-label="Average local time of first observed departure from parking, across days where one was observed. Days with none are excluded, not counted as zero."
-          ></span>
-        </h2>
-        <p class="leaderboard-caption">Average time of first departure from parking. Days with none observed are excluded, not counted as zero.</p>
-        <div class="leaderboard-list" id="lb-departure"></div>
-      </article>
-      <article class="leaderboard">
-        <h2>
-          Parked-overnight compliance
-          <span
-            class="info-tip"
-            tabindex="0"
-            data-tooltip="Share of nights in range where the vehicle was seen inside the parking geofence between 10pm and 5am local. A vehicle genuinely away on a multi-day trip shows as non-compliant the same as one left out for no reason — check the day table below before assuming misuse."
-            aria-label="Share of nights the vehicle was seen inside the parking geofence between 10pm and 5am local."
-          ></span>
-        </h2>
-        <p class="leaderboard-caption">Share of nights each vehicle was seen parked overnight.</p>
-        <div class="leaderboard-list" id="lb-overnight"></div>
-      </article>
-      <article class="leaderboard">
-        <h2>
-          Most GPS anomalies
-          <span
-            class="info-tip"
-            tabindex="0"
-            data-tooltip="Count of gps_jump + frozen_while_moving detections in range - see the GPS anomalies table further down for exactly what each kind means and the numbers behind each flag."
-            aria-label="Count of gps_jump and frozen_while_moving detections in range."
-          ></span>
-        </h2>
-        <p class="leaderboard-caption">Implausible speed jumps or "moving" readings where the position didn't change — worth a closer look.</p>
-        <div class="leaderboard-list" id="lb-anomalies"></div>
-      </article>
-      <article class="leaderboard">
-        <h2>
-          Lowest ride-corroborated %
-          <span
-            class="info-tip"
-            tabindex="0"
-            data-tooltip="Ride-matched moving seconds ÷ mapped moving seconds, per vehicle, across this date range. Unmapped vehicles are excluded entirely (no phone on file = nothing to check against). This is the raw percentage only - see Drivers for the confidence score, which weighs it against each vehicle's own history."
-            aria-label="Ride-matched moving seconds divided by mapped moving seconds, per vehicle. Unmapped vehicles excluded. See Drivers for the confidence score."
-          ></span>
-        </h2>
-        <p class="leaderboard-caption">Mapped vehicles only — how much moving time is backed by an actual Yango ride. See <a href="drivers.html">Drivers</a> for the full misuse review.</p>
-        <div class="leaderboard-list" id="lb-ride-corroboration"></div>
-      </article>
-    </section>
-
-    <section class="grid">
+    <h2 class="section-heading">Trends</h2>
+    <section class="chart-grid" aria-label="Fleet trends over time">
       <article class="card card-chart">
         <header class="card-head">
           <h2>
@@ -173,6 +80,193 @@
         <div class="chart-wrap chart-wrap-sm">
           <svg id="chart-utilisation-day" class="chart-svg" data-tip="tip-utilisation-day" role="img" aria-label="Fleet utilisation per day"></svg>
           <div id="tip-utilisation-day" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Revenue per day
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Fleet total gross Yango revenue, from mapped vehicles only, attributed to the local day each ride ended. Vehicles with no driver mapped for a given period contribute nothing here, same as everywhere else on this page — mapping coverage limits what revenue can be attributed at all."
+              aria-label="Fleet total gross Yango revenue from mapped vehicles only, by the local day each ride ended."
+            ></span>
+          </h2>
+          <p class="card-sub">fleet total, mapped vehicles only, gross NPR</p>
+        </header>
+        <div class="chart-wrap chart-wrap-sm">
+          <svg id="chart-revenue-day" class="chart-svg" data-tip="tip-revenue-day" role="img" aria-label="Fleet revenue per day"></svg>
+          <div id="tip-revenue-day" class="tip" hidden></div>
+        </div>
+      </article>
+    </section>
+
+    <h2 class="section-heading">Rankings</h2>
+    <section class="chart-grid" aria-label="Per-vehicle rankings">
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Biggest optimisation opportunities
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Sum of idle + maintenance seconds across the whole selected date range, per vehicle. This is a total, not a rate — a vehicle reporting for more days can rank higher even at a perfectly normal idle rate."
+              aria-label="Sum of idle + maintenance seconds across the selected date range, per vehicle. A total, not a rate."
+            ></span>
+          </h2>
+          <p class="card-sub">idle + maintenance hours this period — start here</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-lb-opportunity" class="chart-svg" data-tip="tip-lb-opportunity" role="img" aria-label="Vehicles ranked by idle plus maintenance time"></svg>
+          <div id="tip-lb-opportunity" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Longest in maintenance right now
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Vehicles currently mid-visit (haven't left the maintenance geofence yet), ranked by how long the current visit has run so far. Independent of the date range above — this is about right now, not the selected period."
+              aria-label="Vehicles currently mid-visit, ranked by how long the current visit has run so far. Independent of the date range above."
+            ></span>
+          </h2>
+          <p class="card-sub">ongoing maintenance visits, hours so far</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-lb-maintenance-now" class="chart-svg" data-tip="tip-lb-maintenance-now" role="img" aria-label="Vehicles currently in maintenance, by duration so far"></svg>
+          <div id="tip-lb-maintenance-now" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Lowest utilisation
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Each vehicle's own total moving seconds ÷ total tracked seconds, summed across the whole selected date range — a per-vehicle rate. Different from the 'Utilisation per day' chart above, which is a fleet-wide daily rate, not per vehicle."
+              aria-label="Each vehicle's total moving seconds divided by total tracked seconds across the whole date range - a per-vehicle rate, different from the fleet-wide daily chart above."
+            ></span>
+          </h2>
+          <p class="card-sub">moving time as a share of tracked time — worst first</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-lb-utilisation" class="chart-svg" data-tip="tip-lb-utilisation" role="img" aria-label="Vehicles ranked by utilisation, lowest first"></svg>
+          <div id="tip-lb-utilisation" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Latest morning departures
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Average local time of the first observed transition from inside the parking geofence to outside it, across days where one actually happened. Days with none observed are excluded from the average entirely, not treated as a late (or zero) departure."
+              aria-label="Average local time of first observed departure from parking, across days where one was observed. Days with none are excluded, not counted as zero."
+            ></span>
+          </h2>
+          <p class="card-sub">average first-departure time — latest first</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-lb-departure" class="chart-svg" data-tip="tip-lb-departure" role="img" aria-label="Vehicles ranked by average morning departure time, latest first"></svg>
+          <div id="tip-lb-departure" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Parked-overnight compliance
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Share of nights in range where the vehicle was seen inside the parking geofence between 10pm and 5am local. A vehicle genuinely away on a multi-day trip shows as non-compliant the same as one left out for no reason — check the day table below before assuming misuse."
+              aria-label="Share of nights the vehicle was seen inside the parking geofence between 10pm and 5am local."
+            ></span>
+          </h2>
+          <p class="card-sub">share of nights parked overnight — worst first</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-lb-overnight" class="chart-svg" data-tip="tip-lb-overnight" role="img" aria-label="Vehicles ranked by parked-overnight compliance, lowest first"></svg>
+          <div id="tip-lb-overnight" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Most GPS anomalies
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Count of gps_jump + frozen_while_moving detections in range - see the GPS anomalies table further down for exactly what each kind means and the numbers behind each flag."
+              aria-label="Count of gps_jump and frozen_while_moving detections in range."
+            ></span>
+          </h2>
+          <p class="card-sub">implausible speed jumps or frozen-while-moving readings</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-lb-anomalies" class="chart-svg" data-tip="tip-lb-anomalies" role="img" aria-label="Vehicles ranked by GPS anomaly count"></svg>
+          <div id="tip-lb-anomalies" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Lowest ride-corroborated %
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Ride-matched moving seconds ÷ mapped moving seconds, per vehicle, across this date range. Unmapped vehicles are excluded entirely (no phone on file = nothing to check against). This is the raw percentage only - see Drivers for the confidence score, which weighs it against each vehicle's own history."
+              aria-label="Ride-matched moving seconds divided by mapped moving seconds, per vehicle. Unmapped vehicles excluded. See Drivers for the confidence score."
+            ></span>
+          </h2>
+          <p class="card-sub">
+            mapped vehicles only, moving time backed by a ride — worst first. See
+            <a href="drivers.html">Drivers</a> for the full misuse review.
+          </p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-lb-ride-corroboration" class="chart-svg" data-tip="tip-lb-ride-corroboration" role="img" aria-label="Vehicles ranked by ride-corroborated percentage, lowest first"></svg>
+          <div id="tip-lb-ride-corroboration" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Revenue per vehicle
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Total gross Yango revenue attributed to this vehicle across the date range, via whichever driver was mapped to it at the time each ride ended. Unmapped periods contribute nothing - this is a floor on true revenue, not a ceiling, for any vehicle with mapping gaps."
+              aria-label="Total gross Yango revenue attributed to this vehicle across the date range, via the mapped driver at the time. Unmapped periods contribute nothing."
+            ></span>
+          </h2>
+          <p class="card-sub">total gross NPR this period — top earners first</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-revenue-vehicle" class="chart-svg" data-tip="tip-revenue-vehicle" role="img" aria-label="Vehicles ranked by total revenue"></svg>
+          <div id="tip-revenue-vehicle" class="tip" hidden></div>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Revenue per active hour
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Total revenue ÷ total moving hours (this vehicle's Runtime, from the day table) — a productivity/efficiency lens rather than a raw total: a vehicle that's out less but earns more per hour on the road is doing better than one racking up hours for the same money. Excludes vehicles with under 30 minutes of moving time in range (not enough to mean anything)."
+              aria-label="Total revenue divided by total moving hours - efficiency, not just total earnings. Vehicles with under 30 minutes of moving time excluded."
+            ></span>
+          </h2>
+          <p class="card-sub">gross NPR ÷ moving hour — lowest first</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-revenue-per-hour" class="chart-svg" data-tip="tip-revenue-per-hour" role="img" aria-label="Vehicles ranked by revenue per moving hour, lowest first"></svg>
+          <div id="tip-revenue-per-hour" class="tip" hidden></div>
         </div>
       </article>
     </section>

@@ -15,6 +15,7 @@
   let recentVisits = [];
   let anomalies = [];
   let rideMatchMetrics = [];
+  let revenueMetrics = [];
   let daySortState = { key: "local_date", dir: -1 };
   let visitsSortState = { key: "duration_seconds", dir: -1 };
   let anomaliesSortState = { key: "detected_at", dir: -1 };
@@ -41,6 +42,9 @@
   }
   function fmtPct(p) {
     return `${Math.round(p)}%`;
+  }
+  function fmtNpr(v) {
+    return `Rs ${Math.round(v).toLocaleString("en-US")}`;
   }
   function fmtDateLabel(isoDate) {
     return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -161,13 +165,14 @@
   async function loadAll() {
     const startDate = document.getElementById("range-start").value;
     const endDate = document.getElementById("range-end").value;
-    const [latest, days, ongoingRaw, recent, anomaliesRaw, rideMatch] = await Promise.all([
+    const [latest, days, ongoingRaw, recent, anomaliesRaw, rideMatch, revenue] = await Promise.all([
       API.fetchLatest(),
       API.fetchDailyMetrics({ startDate, endDate }),
       API.fetchMaintenanceVisits({ startDate: null }),
       API.fetchMaintenanceVisits({ startDate }),
       API.fetchAnomalies({ startDate, endDate }),
       API.fetchRideMatchDailyMetrics({ startDate, endDate }),
+      API.fetchVehicleRevenueDailyMetrics({ startDate, endDate }),
     ]);
     latestRows = latest;
     dayMetrics = days;
@@ -175,36 +180,13 @@
     recentVisits = recent;
     anomalies = anomaliesRaw;
     rideMatchMetrics = rideMatch;
+    revenueMetrics = revenue;
 
     populateVehicleSelect(document.getElementById("vehicle-filter"), { includeAll: true });
     populateVehicleSelect(document.getElementById("deep-dive-vehicle"), { includeAll: false });
   }
 
-  // ---- leaderboards ---------------------------------------------------
-
-  function renderLeaderboardList(elId, items) {
-    const el = document.getElementById(elId);
-    el.innerHTML = "";
-    if (!items.length) {
-      el.innerHTML = '<p class="leaderboard-empty">Not enough data in this range.</p>';
-      return;
-    }
-    items.forEach((item, i) => {
-      const row = document.createElement("div");
-      row.className = "leaderboard-row";
-      const rank = document.createElement("span");
-      rank.className = "leaderboard-rank";
-      rank.textContent = `${i + 1}.`;
-      const name = document.createElement("span");
-      name.className = "leaderboard-name";
-      name.textContent = item.name;
-      const value = document.createElement("span");
-      value.className = "leaderboard-value" + (item.alert ? " is-alerting" : "");
-      value.textContent = item.value;
-      row.append(rank, name, value);
-      el.appendChild(row);
-    });
-  }
+  // ---- ranking charts ---------------------------------------------------
 
   function groupDayMetricsByVehicle() {
     const byVehicle = new Map(); // imei -> { vehicle_no, rows: [] }
@@ -215,77 +197,86 @@
     return byVehicle;
   }
 
-  function renderLeaderboards() {
+  function renderRankingCharts() {
     const byVehicle = groupDayMetricsByVehicle();
 
     // Biggest optimisation opportunities: most idle + maintenance seconds.
     const opportunity = [...byVehicle.entries()]
       .map(([imei, v]) => ({
-        name: v.vehicle_no || imei,
-        seconds: v.rows.reduce((s, r) => s + (r.idle_seconds || 0) + (r.maintenance_seconds || 0), 0),
+        label: v.vehicle_no || imei,
+        value: v.rows.reduce((s, r) => s + (r.idle_seconds || 0) + (r.maintenance_seconds || 0), 0),
       }))
-      .filter((x) => x.seconds > 0)
-      .sort((a, b) => b.seconds - a.seconds)
-      .slice(0, 5)
-      .map((x) => ({ name: x.name, value: fmtHm(x.seconds), alert: true }));
-    renderLeaderboardList("lb-opportunity", opportunity);
+      .filter((x) => x.value > 0);
+    CHART.barChart(document.getElementById("chart-lb-opportunity"), opportunity, {
+      valueLabel: fmtHm,
+      color: "var(--state-idle)",
+    });
 
     // Currently in maintenance longest.
-    const maintNow = [...ongoingVisits]
-      .sort((a, b) => b.duration_seconds - a.duration_seconds)
-      .slice(0, 5)
-      .map((v) => ({ name: v.vehicle_no || v.imei_no, value: `${fmtHm(v.duration_seconds)} so far`, alert: true }));
-    renderLeaderboardList("lb-maintenance-now", maintNow);
+    const maintNow = ongoingVisits.map((v) => ({ label: v.vehicle_no || v.imei_no, value: v.duration_seconds }));
+    CHART.barChart(document.getElementById("chart-lb-maintenance-now"), maintNow, {
+      valueLabel: fmtHm,
+      tipUnit: "so far",
+      color: "var(--state-maintenance)",
+    });
 
     // Lowest utilisation (moving seconds / tracked seconds, weighted).
     const utilisation = [...byVehicle.entries()]
       .map(([imei, v]) => {
         const moving = v.rows.reduce((s, r) => s + (r.moving_seconds || 0), 0);
         const tracked = v.rows.reduce((s, r) => s + (r.tracked_seconds || 0), 0);
-        return { name: v.vehicle_no || imei, pct: tracked > 0 ? (100 * moving) / tracked : null };
+        return { label: v.vehicle_no || imei, value: tracked > 0 ? (100 * moving) / tracked : null };
       })
-      .filter((x) => x.pct != null)
-      .sort((a, b) => a.pct - b.pct)
-      .slice(0, 5)
-      .map((x) => ({ name: x.name, value: fmtPct(x.pct), alert: x.pct < 25 }));
-    renderLeaderboardList("lb-utilisation", utilisation);
+      .filter((x) => x.value != null);
+    CHART.barChart(document.getElementById("chart-lb-utilisation"), utilisation, {
+      valueLabel: fmtPct,
+      ascending: true,
+      color: "var(--state-moving)",
+    });
 
     // Latest average morning departure.
     const departure = [...byVehicle.entries()]
       .map(([imei, v]) => {
         const times = v.rows.map((r) => r.first_departure_from_parking).filter(Boolean);
-        return { name: v.vehicle_no || imei, avgMin: times.length ? avgLocalMinutes(times) : null };
+        return { label: v.vehicle_no || imei, value: times.length ? avgLocalMinutes(times) : null };
       })
-      .filter((x) => x.avgMin != null)
-      .sort((a, b) => b.avgMin - a.avgMin)
-      .slice(0, 5)
-      .map((x) => ({ name: x.name, value: fmtMinutesOfDay(x.avgMin) }));
-    renderLeaderboardList("lb-departure", departure);
+      .filter((x) => x.value != null);
+    CHART.barChart(document.getElementById("chart-lb-departure"), departure, {
+      valueLabel: fmtMinutesOfDay,
+      tipUnit: "avg",
+      color: "var(--state-parked)",
+    });
 
     // Parked-overnight compliance.
     const overnight = [...byVehicle.entries()]
       .map(([imei, v]) => {
         const nights = v.rows.length;
         const compliant = v.rows.filter((r) => r.parked_overnight).length;
-        return { name: v.vehicle_no || imei, pct: nights ? (100 * compliant) / nights : null };
+        return { label: v.vehicle_no || imei, value: nights ? (100 * compliant) / nights : null };
       })
-      .filter((x) => x.pct != null)
-      .sort((a, b) => a.pct - b.pct)
-      .slice(0, 5)
-      .map((x) => ({ name: x.name, value: fmtPct(x.pct), alert: x.pct < 50 }));
-    renderLeaderboardList("lb-overnight", overnight);
+      .filter((x) => x.value != null);
+    CHART.barChart(document.getElementById("chart-lb-overnight"), overnight, {
+      valueLabel: fmtPct,
+      ascending: true,
+      color: "var(--state-parked)",
+    });
 
     // Most GPS anomalies.
-    const anomalyCounts = new Map(); // imei -> { name, count }
+    const anomalyCounts = new Map(); // imei -> count
+    const anomalyLabels = new Map(); // imei -> label
     for (const a of anomalies) {
-      if (!anomalyCounts.has(a.imei_no)) anomalyCounts.set(a.imei_no, { name: a.vehicle_no || a.imei_no, count: 0 });
-      anomalyCounts.get(a.imei_no).count++;
+      anomalyCounts.set(a.imei_no, (anomalyCounts.get(a.imei_no) || 0) + 1);
+      if (!anomalyLabels.has(a.imei_no)) anomalyLabels.set(a.imei_no, a.vehicle_no || a.imei_no);
     }
-    const anomalyBoard = [...anomalyCounts.values()]
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5)
-      .map((x) => ({ name: x.name, value: String(x.count), alert: true }));
-    renderLeaderboardList("lb-anomalies", anomalyBoard);
+    const anomalyBoard = [...anomalyCounts.entries()].map(([imei, count]) => ({
+      label: anomalyLabels.get(imei),
+      value: count,
+    }));
+    CHART.barChart(document.getElementById("chart-lb-anomalies"), anomalyBoard, {
+      valueLabel: (v) => String(Math.round(v)),
+      tipUnit: "detections",
+      color: "var(--critical)",
+    });
 
     // Lowest ride-corroborated % - mapped vehicles only (mapped_moving_seconds
     // excludes unmapped time from the denominator, same convention as
@@ -300,11 +291,52 @@
     }
     const rideBoard = [...rideByVehicle.values()]
       .filter((v) => v.mapped > 0)
-      .map((v) => ({ name: v.name, pct: (100 * v.matched) / v.mapped }))
-      .sort((a, b) => a.pct - b.pct)
-      .slice(0, 5)
-      .map((x) => ({ name: x.name, value: fmtPct(x.pct), alert: x.pct < 50 }));
-    renderLeaderboardList("lb-ride-corroboration", rideBoard);
+      .map((v) => ({ label: v.name, value: (100 * v.matched) / v.mapped }));
+    CHART.barChart(document.getElementById("chart-lb-ride-corroboration"), rideBoard, {
+      valueLabel: fmtPct,
+      ascending: true,
+      color: "var(--series-revenue)",
+    });
+
+    // Revenue per vehicle - keyed by vehicleLabel() (fetchLatest()-backed,
+    // covers every mapped vehicle regardless of whether it has GPS day-
+    // metrics rows in this exact range), not the byVehicle map above.
+    const revenueByImei = new Map();
+    for (const r of revenueMetrics) {
+      revenueByImei.set(r.imei_no, (revenueByImei.get(r.imei_no) || 0) + (r.gross_revenue || 0));
+    }
+    const revenueBoard = [...revenueByImei.entries()].map(([imei, revenue]) => ({
+      label: vehicleLabel(imei),
+      value: revenue,
+    }));
+    CHART.barChart(document.getElementById("chart-revenue-vehicle"), revenueBoard, {
+      valueLabel: fmtNpr,
+      color: "var(--series-revenue)",
+    });
+
+    // Revenue per active hour - revenue divided by this vehicle's total
+    // moving seconds in range (from the day-metrics map above). Vehicles
+    // under 30 minutes of moving time are excluded (not enough to mean
+    // anything - see the card's tooltip).
+    const movingSecondsByImei = new Map();
+    for (const [imei, v] of byVehicle) {
+      movingSecondsByImei.set(imei, v.rows.reduce((s, r) => s + (r.moving_seconds || 0), 0));
+    }
+    const perHourBoard = [...revenueByImei.entries()]
+      .map(([imei, revenue]) => {
+        const movingSeconds = movingSecondsByImei.get(imei) || 0;
+        return {
+          label: vehicleLabel(imei),
+          value: movingSeconds >= 1800 ? revenue / (movingSeconds / 3600) : null,
+        };
+      })
+      .filter((x) => x.value != null);
+    CHART.barChart(document.getElementById("chart-revenue-per-hour"), perHourBoard, {
+      valueLabel: fmtNpr,
+      tipUnit: "/ moving hour",
+      ascending: true,
+      color: "var(--series-revenue)",
+    });
   }
 
   // ---- fleet trend charts -----------------------------------------------
@@ -333,6 +365,19 @@
         return { x: new Date(`${d}T00:00:00Z`), y: b.tracked > 0 ? (100 * b.moving) / b.tracked : 0 };
       }),
       { valueLabel: (v) => `${Math.round(v)}%`, tipTitle: "Utilisation", xLabel: dateLabel, color: "var(--state-idle)" }
+    );
+
+    // Revenue by day, defaulting to 0 on days with rides for none of the
+    // fleet - dates come from dayMetrics (one row per vehicle per tracked
+    // day) so the trend line doesn't gap on genuinely zero-revenue days.
+    const revenueByDate = new Map();
+    for (const r of revenueMetrics) {
+      revenueByDate.set(r.local_date, (revenueByDate.get(r.local_date) || 0) + (r.gross_revenue || 0));
+    }
+    CHART.lineChart(
+      document.getElementById("chart-revenue-day"),
+      dates.map((d) => ({ x: new Date(`${d}T00:00:00Z`), y: revenueByDate.get(d) || 0 })),
+      { valueLabel: fmtNpr, tipTitle: "Revenue", xLabel: dateLabel, color: "var(--series-revenue)" }
     );
   }
 
@@ -646,7 +691,7 @@
   // ---- orchestration --------------------------------------------------
 
   function renderAll() {
-    renderLeaderboards();
+    renderRankingCharts();
     renderCharts();
     renderDayTable();
     renderVisitsTable();
@@ -698,7 +743,10 @@
 
     refresh();
     window.addEventListener("resize", () => {
-      if (dayMetrics.length) renderCharts();
+      if (dayMetrics.length) {
+        renderCharts();
+        renderRankingCharts();
+      }
     });
   }
 

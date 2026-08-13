@@ -27,6 +27,14 @@
   --state-idle: #eda100;
   --state-maintenance: #eb6834;
   --state-offline: #898781;
+  /* Financial charts only (revenue) - deliberately NOT a vehicle state, so
+     it's visually distinct from the --state-* set. Validated via the
+     dataviz skill's palette validator: passes the adjacent-pairs CVD/
+     normal-vision gates against the app's existing four state hues in both
+     themes (the "all-pairs simultaneous" gate doesn't apply - revenue
+     charts are single-series and never shown needing color discrimination
+     against a state legend at the same time). */
+  --series-revenue: #4a3aa7;
 
   --critical: #d03b3b;
 
@@ -53,6 +61,7 @@
     --state-idle: #c98500;
     --state-maintenance: #d95926;
     --state-offline: #898781;
+    --series-revenue: #9085e9;
   }
 }
 
@@ -73,6 +82,7 @@
   --state-idle: #c98500;
   --state-maintenance: #d95926;
   --state-offline: #898781;
+  --series-revenue: #9085e9;
 }
 
 * {
@@ -358,6 +368,28 @@ input[type="date"] {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+.section-heading {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Responsive small-multiples grid for the analytics page's ranking/trend
+   chart cards - any number of equal-weight chart cards, wrapping instead of
+   the fixed 2-column map layout .grid above is built for. */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+.chart-grid .card {
+  margin-bottom: 0;
+}
+
 /* Small multiples: two independent single-axis charts stacked in the grid's
    second column, never a shared/dual-axis plot (see anti-patterns.md). */
 .stack {
@@ -793,29 +825,8 @@ tbody tr:hover {
   color: var(--critical);
 }
 
-/* ---------- analytics: leaderboards ---------- */
+/* ---------- leaderboard-style lists (front page attention panels, analytics tables) ---------- */
 
-.leaderboards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: var(--gap);
-  margin-bottom: var(--gap);
-}
-.leaderboard {
-  padding: 14px 16px;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.leaderboard h2 {
-  margin: 0;
-  font-size: 13px;
-}
-.leaderboard-caption {
-  margin: 2px 0 10px;
-  font-size: 11px;
-  color: var(--text-muted);
-}
 .leaderboard-list {
   display: flex;
   flex-direction: column;

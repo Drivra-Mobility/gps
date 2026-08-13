@@ -208,6 +208,22 @@ const API = (() => {
     return data;
   }
 
+  // Per-vehicle-per-day gross Yango revenue via the mapped driver - see
+  // schema.sql's vehicle_revenue_day_metrics(). Mapped vehicles only;
+  // unmapped periods contribute nothing (see analytics.js's revenue
+  // tooltips). Same startDate/endDate/imei shape as fetchDailyMetrics()
+  // so the two join client-side on imei_no + local_date.
+  async function fetchVehicleRevenueDailyMetrics({ startDate, endDate, imei = null }) {
+    const { data, error } = await AUTH.client.rpc("vehicle_revenue_day_metrics", {
+      p_start_date: startDate,
+      p_end_date: endDate,
+      p_imei: imei,
+      p_tz: CONFIG.TIMEZONE,
+    });
+    if (error) throw error;
+    return data;
+  }
+
   // How long a vehicle has continuously been in its current classify()
   // state, estimated client-side from whatever history rows are already
   // loaded (no extra query) - walks backward from the latest reading while
@@ -344,6 +360,7 @@ const API = (() => {
     fetchRideMatchDailyMetrics,
     fetchVehicleRideSegments,
     fetchDriverRides,
+    fetchVehicleRevenueDailyMetrics,
     groupByVehicle,
     classify,
     ageSeconds,
