@@ -89,11 +89,51 @@
               <tr>
                 <th scope="col">Vehicle</th>
                 <th scope="col">Driver</th>
-                <th scope="col">Risk</th>
-                <th scope="col" class="num">Ride-corroborated</th>
-                <th scope="col" class="num">Unmatched</th>
-                <th scope="col" class="num">Explained (near base)</th>
-                <th scope="col" class="num">Unmapped</th>
+                <th scope="col">
+                  Risk
+                  <span
+                    class="info-tip"
+                    tabindex="0"
+                    data-tooltip="A 0-100 score weighing three things: how far this vehicle's recent unmatched rate has moved from its OWN historical baseline (falls back to the fleet median if it's too new to have one), whether that's a one-off or recurring across several recent days, and the absolute unmatched rate itself. Short, noisy unmatched segments scale the score down rather than being ignored. A heuristic to prioritise investigation, not a verdict — check the segments below before acting on it."
+                    aria-label="A 0-100 score weighing recent-vs-baseline change, persistence across days, and absolute rate. A heuristic to prioritise investigation, not a verdict."
+                  ></span>
+                </th>
+                <th scope="col" class="num">
+                  Ride-corroborated
+                  <span
+                    class="info-tip"
+                    tabindex="0"
+                    data-tooltip="Ride-matched moving time ÷ mapped moving time, summed across the whole lookback period selected above."
+                    aria-label="Ride-matched moving time divided by mapped moving time, across the whole lookback period."
+                  ></span>
+                </th>
+                <th scope="col" class="num">
+                  Unmatched
+                  <span
+                    class="info-tip"
+                    tabindex="0"
+                    data-tooltip="Total moving time with no overlapping Yango ride and not near the parking/maintenance geofence — the strongest single misuse signal, but a dispatched-then-cancelled ride would also show up here (cancelled rides aren't recorded anywhere today)."
+                    aria-label="Total moving time with no overlapping ride and not near the parking or maintenance geofence."
+                  ></span>
+                </th>
+                <th scope="col" class="num">
+                  Explained (near base)
+                  <span
+                    class="info-tip"
+                    tabindex="0"
+                    data-tooltip="Moving time that started or ended near the parking or maintenance geofence — treated as a plausible repositioning/errand trip and not counted against the vehicle, even though no ride matched it."
+                    aria-label="Moving time that started or ended near the parking or maintenance geofence — not counted against the vehicle."
+                  ></span>
+                </th>
+                <th scope="col" class="num">
+                  Unmapped
+                  <span
+                    class="info-tip info-tip-right"
+                    tabindex="0"
+                    data-tooltip="Moving time from before this vehicle had a driver phone on file (or any period with no mapping at all) — there's no driver to check it against, so it's excluded from both the risk score and the ride-corroborated percentage, not folded into Unmatched."
+                    aria-label="Moving time with no driver mapped at the time — excluded from the risk score and ride-corroborated percentage, not folded into Unmatched."
+                  ></span>
+                </th>
               </tr>
             </thead>
             <tbody id="misuse-tbody">
@@ -118,7 +158,15 @@
                   <th scope="col">End</th>
                   <th scope="col" class="num">Duration</th>
                   <th scope="col" class="num">Distance</th>
-                  <th scope="col">Classification</th>
+                  <th scope="col">
+                    Classification
+                    <span
+                      class="info-tip info-tip-right"
+                      tabindex="0"
+                      data-tooltip="One continuous stretch of movement (a 'segment'), checked in this order: ride matched (overlaps a Yango ride) beats explained near base (started/ended near parking or maintenance) beats pending (ended too recently to know yet, within the sync grace window) beats unmatched. Unmapped means no driver was on file for this vehicle at the time."
+                      aria-label="Ride matched beats explained near base beats pending (too recent to know yet) beats unmatched. Unmapped means no driver was on file at the time."
+                    ></span>
+                  </th>
                 </tr>
               </thead>
               <tbody id="misuse-segments-tbody"></tbody>

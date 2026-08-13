@@ -46,37 +46,93 @@
 
     <section class="leaderboards" aria-label="Leaderboards">
       <article class="leaderboard">
-        <h2>Biggest optimisation opportunities</h2>
+        <h2>
+          Biggest optimisation opportunities
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Sum of idle + maintenance seconds across the whole selected date range, per vehicle. This is a total, not a rate — a vehicle reporting for more days can rank higher even at a perfectly normal idle rate."
+            aria-label="Sum of idle + maintenance seconds across the selected date range, per vehicle. A total, not a rate."
+          ></span>
+        </h2>
         <p class="leaderboard-caption">Most idle + maintenance time this period — start here.</p>
         <div class="leaderboard-list" id="lb-opportunity"></div>
       </article>
       <article class="leaderboard">
-        <h2>Longest in maintenance right now</h2>
+        <h2>
+          Longest in maintenance right now
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Vehicles currently mid-visit (haven't left the maintenance geofence yet), ranked by how long the current visit has run so far. Independent of the date range above — this is about right now, not the selected period."
+            aria-label="Vehicles currently mid-visit, ranked by how long the current visit has run so far. Independent of the date range above."
+          ></span>
+        </h2>
         <p class="leaderboard-caption">Vehicles currently in an ongoing maintenance visit.</p>
         <div class="leaderboard-list" id="lb-maintenance-now"></div>
       </article>
       <article class="leaderboard">
-        <h2>Lowest utilisation</h2>
+        <h2>
+          Lowest utilisation
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Each vehicle's own total moving seconds ÷ total tracked seconds, summed across the whole selected date range — a per-vehicle rate. Different from the 'Utilisation per day' chart below, which is a fleet-wide daily rate, not per vehicle."
+            aria-label="Each vehicle's total moving seconds divided by total tracked seconds across the whole date range - a per-vehicle rate, different from the fleet-wide daily chart below."
+          ></span>
+        </h2>
         <p class="leaderboard-caption">Moving time as a share of tracked time, this period.</p>
         <div class="leaderboard-list" id="lb-utilisation"></div>
       </article>
       <article class="leaderboard">
-        <h2>Latest morning departures</h2>
+        <h2>
+          Latest morning departures
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Average local time of the first observed transition from inside the parking geofence to outside it, across days where one actually happened. Days with none observed are excluded from the average entirely, not treated as a late (or zero) departure."
+            aria-label="Average local time of first observed departure from parking, across days where one was observed. Days with none are excluded, not counted as zero."
+          ></span>
+        </h2>
         <p class="leaderboard-caption">Average time of first departure from parking. Days with none observed are excluded, not counted as zero.</p>
         <div class="leaderboard-list" id="lb-departure"></div>
       </article>
       <article class="leaderboard">
-        <h2>Parked-overnight compliance</h2>
+        <h2>
+          Parked-overnight compliance
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Share of nights in range where the vehicle was seen inside the parking geofence between 10pm and 5am local. A vehicle genuinely away on a multi-day trip shows as non-compliant the same as one left out for no reason — check the day table below before assuming misuse."
+            aria-label="Share of nights the vehicle was seen inside the parking geofence between 10pm and 5am local."
+          ></span>
+        </h2>
         <p class="leaderboard-caption">Share of nights each vehicle was seen parked overnight.</p>
         <div class="leaderboard-list" id="lb-overnight"></div>
       </article>
       <article class="leaderboard">
-        <h2>Most GPS anomalies</h2>
+        <h2>
+          Most GPS anomalies
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Count of gps_jump + frozen_while_moving detections in range - see the GPS anomalies table further down for exactly what each kind means and the numbers behind each flag."
+            aria-label="Count of gps_jump and frozen_while_moving detections in range."
+          ></span>
+        </h2>
         <p class="leaderboard-caption">Implausible speed jumps or "moving" readings where the position didn't change — worth a closer look.</p>
         <div class="leaderboard-list" id="lb-anomalies"></div>
       </article>
       <article class="leaderboard">
-        <h2>Lowest ride-corroborated %</h2>
+        <h2>
+          Lowest ride-corroborated %
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Ride-matched moving seconds ÷ mapped moving seconds, per vehicle, across this date range. Unmapped vehicles are excluded entirely (no phone on file = nothing to check against). This is the raw percentage only - see Drivers for the confidence score, which weighs it against each vehicle's own history."
+            aria-label="Ride-matched moving seconds divided by mapped moving seconds, per vehicle. Unmapped vehicles excluded. See Drivers for the confidence score."
+          ></span>
+        </h2>
         <p class="leaderboard-caption">Mapped vehicles only — how much moving time is backed by an actual Yango ride. See <a href="drivers.html">Drivers</a> for the full misuse review.</p>
         <div class="leaderboard-list" id="lb-ride-corroboration"></div>
       </article>
@@ -85,7 +141,15 @@
     <section class="grid">
       <article class="card card-chart">
         <header class="card-head">
-          <h2>Distance per day</h2>
+          <h2>
+            Distance per day
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Fleet total, summing only hops recorded while a vehicle was actually moving (speed > 0) - GPS drift while stationary isn't counted. Different from the front page's live 'Distance travelled' KPI, which sums every hop regardless of state and so reads higher for the same period."
+              aria-label="Fleet total, summing only hops recorded while moving. The front page's Distance travelled KPI sums every hop regardless of state and reads higher."
+            ></span>
+          </h2>
           <p class="card-sub">fleet total, moving-time hops only</p>
         </header>
         <div class="chart-wrap chart-wrap-sm">
@@ -95,7 +159,15 @@
       </article>
       <article class="card card-chart">
         <header class="card-head">
-          <h2>Utilisation per day</h2>
+          <h2>
+            Utilisation per day
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Sums every vehicle's moving seconds and tracked seconds fleet-wide for each calendar day, then divides once - a time-weighted fleet total, not an average of each vehicle's own percentage. Different window and different math than the front page's live 'Fleet utilisation' KPI, so the two numbers won't usually match."
+              aria-label="Sums every vehicle's moving and tracked seconds fleet-wide per calendar day, then divides once - a time-weighted total, not an average of per-vehicle percentages. Different from the front page's Fleet utilisation KPI."
+            ></span>
+          </h2>
           <p class="card-sub">fleet-wide moving time ÷ tracked time</p>
         </header>
         <div class="chart-wrap chart-wrap-sm">
@@ -144,9 +216,33 @@
               <thead>
                 <tr>
                   <th scope="col">Vehicle</th>
-                  <th scope="col" class="num">Utilisation Δ</th>
-                  <th scope="col" class="num">Distance Δ</th>
-                  <th scope="col" class="num">Maintenance Δ</th>
+                  <th scope="col" class="num">
+                    Utilisation Δ
+                    <span
+                      class="info-tip info-tip-right"
+                      tabindex="0"
+                      data-tooltip="Percentage-point change in this vehicle's moving ÷ tracked time, this period vs. the immediately preceding period of equal length. Green is more moving time, red is less."
+                      aria-label="Percentage-point change in moving over tracked time vs. the previous equal-length period. Green is more, red is less."
+                    ></span>
+                  </th>
+                  <th scope="col" class="num">
+                    Distance Δ
+                    <span
+                      class="info-tip info-tip-right"
+                      tabindex="0"
+                      data-tooltip="Change in total distance (moving-time hops only) vs. the immediately preceding period of equal length."
+                      aria-label="Change in total distance vs. the previous equal-length period."
+                    ></span>
+                  </th>
+                  <th scope="col" class="num">
+                    Maintenance Δ
+                    <span
+                      class="info-tip info-tip-right"
+                      tabindex="0"
+                      data-tooltip="Change in total maintenance time vs. the immediately preceding period of equal length. Unlike the other two columns, green (less maintenance time) is the good direction here."
+                      aria-label="Change in total maintenance time vs. the previous equal-length period. Green (less time) is the good direction here."
+                    ></span>
+                  </th>
                 </tr>
               </thead>
               <tbody id="compare-tbody"></tbody>
@@ -190,14 +286,38 @@
             <tr>
               <th scope="col" data-sort="local_date" aria-sort="descending">Date</th>
               <th scope="col" data-sort="vehicle_no">Vehicle</th>
-              <th scope="col" data-sort="moving_seconds" class="num">Runtime</th>
-              <th scope="col" data-sort="idle_seconds" class="num">Idle</th>
-              <th scope="col" data-sort="parked_seconds" class="num">Parked</th>
-              <th scope="col" data-sort="maintenance_seconds" class="num">Maintenance</th>
-              <th scope="col" data-sort="distance_km" class="num">Distance</th>
-              <th scope="col" data-sort="utilization" class="num">Utilisation</th>
-              <th scope="col" data-sort="first_departure_from_parking">First departure</th>
-              <th scope="col" data-sort="parked_overnight">Parked overnight</th>
+              <th scope="col" data-sort="moving_seconds" class="num">
+                Runtime
+                <span class="info-tip" tabindex="0" data-tooltip="Total time this vehicle reported speed > 0 this local day. Gaps over 10 minutes between polls are excluded as unknown, never counted as idle." aria-label="Total time reporting speed above zero this day. Gaps over 10 minutes are excluded, not counted as idle."></span>
+              </th>
+              <th scope="col" data-sort="idle_seconds" class="num">
+                Idle
+                <span class="info-tip" tabindex="0" data-tooltip="Stopped, but not within the parking or maintenance geofence — the main 'wasted time' signal on this page." aria-label="Stopped, not within the parking or maintenance geofence."></span>
+              </th>
+              <th scope="col" data-sort="parked_seconds" class="num">
+                Parked
+                <span class="info-tip" tabindex="0" data-tooltip="Stopped within the parking geofence set in config.js." aria-label="Stopped within the parking geofence."></span>
+              </th>
+              <th scope="col" data-sort="maintenance_seconds" class="num">
+                Maintenance
+                <span class="info-tip" tabindex="0" data-tooltip="Stopped within the maintenance geofence set in config.js." aria-label="Stopped within the maintenance geofence."></span>
+              </th>
+              <th scope="col" data-sort="distance_km" class="num">
+                Distance
+                <span class="info-tip" tabindex="0" data-tooltip="Straight-line hops between consecutive polls, counted only while moving — see the Distance per day chart above for why this differs from the front page's KPI." aria-label="Straight-line hops between consecutive polls, counted only while moving."></span>
+              </th>
+              <th scope="col" data-sort="utilization" class="num">
+                Utilisation
+                <span class="info-tip" tabindex="0" data-tooltip="This row's Runtime ÷ (Runtime + Idle + Parked + Maintenance) — one vehicle, one day. Shows '—' instead of 0% when there's 0-1 reading that day, since that's not enough data to mean anything." aria-label="Runtime divided by total tracked time, for this one vehicle on this one day. Shows a dash instead of 0% when there's not enough data."></span>
+              </th>
+              <th scope="col" data-sort="first_departure_from_parking">
+                First departure
+                <span class="info-tip" tabindex="0" data-tooltip="First transition from inside the parking geofence to outside it, that local day. Blank means none was observed — the vehicle may have left the day before and not returned, or never been at the yard that day at all." aria-label="First transition from inside the parking geofence to outside it, that day. Blank means none was observed."></span>
+              </th>
+              <th scope="col" data-sort="parked_overnight">
+                Parked overnight
+                <span class="info-tip info-tip-right" tabindex="0" data-tooltip="Whether the vehicle was seen inside the parking geofence at any point between 10pm and 5am local, attributed to the night that started this day." aria-label="Whether the vehicle was seen inside the parking geofence between 10pm and 5am local, attributed to the night that started this day."></span>
+              </th>
             </tr>
           </thead>
           <tbody id="day-tbody">
@@ -253,7 +373,10 @@
               <th scope="col" data-sort="vehicle_no">Vehicle</th>
               <th scope="col" data-sort="visit_start">Start</th>
               <th scope="col" data-sort="visit_end">End</th>
-              <th scope="col" data-sort="duration_seconds" class="num" aria-sort="descending">Duration</th>
+              <th scope="col" data-sort="duration_seconds" class="num" aria-sort="descending">
+                Duration
+                <span class="info-tip info-tip-right" tabindex="0" data-tooltip="Wall-clock time from the first to the last reading inside the maintenance geofence for this visit. An ongoing visit (no End shown) uses the current time as the end, so this number keeps growing until the vehicle actually leaves." aria-label="Wall-clock time from first to last reading inside the maintenance geofence. Ongoing visits use the current time as the end and keep growing."></span>
+              </th>
             </tr>
           </thead>
           <tbody id="visits-tbody">

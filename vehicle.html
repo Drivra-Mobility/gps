@@ -74,7 +74,15 @@
 
       <section class="kpis kpis-activity" aria-label="Activity in the selected window">
         <article class="kpi">
-          <h2>Distance travelled</h2>
+          <h2>
+            Distance travelled
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Straight-line distance between consecutive polls in the selected window, summed regardless of state — includes GPS drift while parked or idle. Analytics' daily distance for this vehicle only counts hops while moving, so it reads lower for the same period."
+              aria-label="Straight-line distance between consecutive polls, summed regardless of state. Analytics' daily distance only counts hops while moving and reads lower."
+            ></span>
+          </h2>
           <p class="kpi-value" id="kpi-distance">—</p>
           <p class="kpi-note">this window</p>
         </article>
@@ -89,7 +97,15 @@
           <p class="kpi-note">this window</p>
         </article>
         <article class="kpi">
-          <h2>Time moving</h2>
+          <h2>
+            Time moving
+            <span
+              class="info-tip info-tip-right"
+              tabindex="0"
+              data-tooltip="This vehicle's moving seconds ÷ tracked seconds in the selected history window (gaps over 10 minutes excluded), live. Analytics' day table shows the same ratio but bucketed into clean calendar days over a much longer range — the two can disagree near a window/day boundary."
+              aria-label="Moving seconds divided by tracked seconds in the selected window, live. Analytics' day table shows the same ratio bucketed into calendar days instead."
+            ></span>
+          </h2>
           <p class="kpi-value" id="kpi-movingpct">—</p>
           <p class="kpi-note">share of this window</p>
         </article>

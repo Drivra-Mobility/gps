@@ -63,7 +63,15 @@
         <p class="kpi-note">speed above zero</p>
       </article>
       <article class="kpi">
-        <h2><span class="swatch swatch-maintenance" aria-hidden="true"></span>In maintenance</h2>
+        <h2>
+          <span class="swatch swatch-maintenance" aria-hidden="true"></span>In maintenance
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="States are mutually exclusive, checked in this order: Moving beats In maintenance beats In parking beats Idle. A stationary vehicle inside both geofences (shouldn't happen given how far apart they are) would count as In maintenance, never both."
+            aria-label="States are mutually exclusive, checked in this order: Moving beats In maintenance beats In parking beats Idle."
+          ></span>
+        </h2>
         <p class="kpi-value" id="kpi-maintenance">—</p>
         <p class="kpi-note">within the maintenance geofence</p>
       </article>
@@ -86,17 +94,41 @@
 
     <section class="kpis kpis-activity" aria-label="Fleet activity in the selected window">
       <article class="kpi">
-        <h2>Distance travelled</h2>
+        <h2>
+          Distance travelled
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Straight-line distance between consecutive polls, summed across every vehicle regardless of state — includes GPS drift while parked or idle. Analytics' daily distance only counts hops while actually moving, so it reads lower for the same period."
+            aria-label="Straight-line distance between consecutive polls, summed across every vehicle regardless of state. Analytics' daily distance only counts hops while moving, so it reads lower."
+          ></span>
+        </h2>
         <p class="kpi-value" id="kpi-distance">—</p>
         <p class="kpi-note">fleet total, this window</p>
       </article>
       <article class="kpi">
-        <h2>Average speed</h2>
+        <h2>
+          Average speed
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Average of each vehicle's own average speed while moving, in the selected window — not weighted by how long each vehicle was actually moving."
+            aria-label="Average of each vehicle's own average speed while moving, in the selected window."
+          ></span>
+        </h2>
         <p class="kpi-value" id="kpi-avgspeed">—</p>
         <p class="kpi-note">while moving, this window</p>
       </article>
       <article class="kpi">
-        <h2>Fleet utilisation</h2>
+        <h2>
+          Fleet utilisation
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Simple average of each vehicle's own moving-time share within the selected history window above, refreshed live every 60s. Different from Analytics' 'Utilisation per day', which sums the whole fleet's moving vs. tracked time per calendar day — different window, different math, so the two numbers won't usually match."
+            aria-label="Simple average of each vehicle's own moving-time share within the selected history window, live. Analytics' Utilisation per day sums the whole fleet's time per calendar day instead — different window and math, so they won't usually match."
+          ></span>
+        </h2>
         <p class="kpi-value" id="kpi-utilisation">—</p>
         <p class="kpi-note">time spent moving vs. stopped</p>
       </article>
