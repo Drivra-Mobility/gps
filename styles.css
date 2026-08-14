@@ -424,8 +424,13 @@ input[type="date"] {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  overflow: hidden;
   margin-bottom: var(--gap);
+  /* Deliberately NOT overflow:hidden - that clipped any popup (.info-tip's
+     ::after, which can't be portaled out like a real element) that needs to
+     render past the card's edge, most commonly a title's info-tip trying to
+     open upward from the very top of the card. #map below gets its own
+     bottom-corner clipping instead, since it's the one thing that actually
+     needs it (full-bleed, flush against the card's rounded corners). */
 }
 .grid .card {
   margin-bottom: 0;
@@ -490,6 +495,10 @@ input[type="date"] {
   height: 460px;
   width: 100%;
   background: var(--page);
+  /* Flush against the card's bottom edge (no padding below it) - clip its
+     own bottom corners now that .card no longer clips for it. */
+  border-radius: 0 0 var(--radius) var(--radius);
+  overflow: hidden;
 }
 #misuse-map {
   height: 320px;
@@ -521,6 +530,11 @@ input[type="date"] {
   fill: var(--page);
   stroke: var(--border);
   stroke-width: 1;
+}
+.timeline-cursor {
+  stroke: var(--text-primary);
+  stroke-width: 1.5;
+  pointer-events: none;
 }
 .timeline-legend {
   display: flex;

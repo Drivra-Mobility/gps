@@ -168,30 +168,54 @@
     if ([...select.options].some((o) => o.value === prev)) select.value = prev;
   }
 
+  // This page fires 8 independent queries on every load. They used to be a
+  // single Promise.all(), which meant one slow/timed-out query (e.g. the
+  // ride-match RPC, by far the heaviest one here) blanked the entire page
+  // even though the other 7 succeeded. Promise.allSettled() + falling back
+  // to whatever was already loaded for anything that fails means a single
+  // flaky query degrades one chart, not the whole page - and returns the
+  // failures so refresh() can say exactly what didn't load instead of a
+  // generic "Load failed."
   async function loadAll() {
     const startDate = document.getElementById("range-start").value;
     const endDate = document.getElementById("range-end").value;
-    const [latest, days, ongoingRaw, recent, anomaliesRaw, rideMatch, revenue, mappings] = await Promise.all([
-      API.fetchLatest(),
-      API.fetchDailyMetrics({ startDate, endDate }),
-      API.fetchMaintenanceVisits({ startDate: null }),
-      API.fetchMaintenanceVisits({ startDate }),
-      API.fetchAnomalies({ startDate, endDate }),
-      API.fetchRideMatchDailyMetrics({ startDate, endDate }),
-      API.fetchVehicleRevenueDailyMetrics({ startDate, endDate }),
-      API.fetchVehicleDriverMappings(),
-    ]);
-    latestRows = latest;
-    dayMetrics = days;
-    ongoingVisits = ongoingRaw.filter((v) => v.is_ongoing);
-    recentVisits = recent;
-    anomalies = anomaliesRaw;
-    rideMatchMetrics = rideMatch;
-    revenueMetrics = revenue;
-    driverByImei = API.currentDriverByImei(mappings);
+    const REQUESTS = [
+      ["latest", "vehicle roster", () => API.fetchLatest()],
+      ["days", "daily metrics", () => API.fetchDailyMetrics({ startDate, endDate })],
+      ["ongoingRaw", "ongoing maintenance", () => API.fetchMaintenanceVisits({ startDate: null })],
+      ["recent", "recent maintenance", () => API.fetchMaintenanceVisits({ startDate })],
+      ["anomaliesRaw", "GPS anomalies", () => API.fetchAnomalies({ startDate, endDate })],
+      ["rideMatch", "ride-corroboration data", () => API.fetchRideMatchDailyMetrics({ startDate, endDate })],
+      ["revenue", "revenue data", () => API.fetchVehicleRevenueDailyMetrics({ startDate, endDate })],
+      ["mappings", "driver mappings", () => API.fetchVehicleDriverMappings()],
+    ];
+    const settled = await Promise.allSettled(REQUESTS.map(([, , fn]) => fn()));
+
+    const failed = [];
+    const byName = {};
+    settled.forEach((r, i) => {
+      const [name, label] = REQUESTS[i];
+      if (r.status === "fulfilled") byName[name] = r.value;
+      else failed.push(label);
+    });
+    if (failed.length === REQUESTS.length) {
+      // Everything failed - nothing to fall back to, surface the first
+      // real error rather than a vague "8 things failed."
+      throw settled[0].reason;
+    }
+
+    if ("latest" in byName) latestRows = byName.latest;
+    if ("days" in byName) dayMetrics = byName.days;
+    if ("ongoingRaw" in byName) ongoingVisits = byName.ongoingRaw.filter((v) => v.is_ongoing);
+    if ("recent" in byName) recentVisits = byName.recent;
+    if ("anomaliesRaw" in byName) anomalies = byName.anomaliesRaw;
+    if ("rideMatch" in byName) rideMatchMetrics = byName.rideMatch;
+    if ("revenue" in byName) revenueMetrics = byName.revenue;
+    if ("mappings" in byName) driverByImei = API.currentDriverByImei(byName.mappings);
 
     populateVehicleSelect(document.getElementById("vehicle-filter"), { includeAll: true });
     populateVehicleSelect(document.getElementById("deep-dive-vehicle"), { includeAll: false });
+    return failed;
   }
 
   // ---- ranking charts ---------------------------------------------------
@@ -731,10 +755,15 @@
     document.body.classList.add("is-refreshing");
     const statusEl = document.getElementById("status");
     try {
-      await loadAll();
+      const failed = await loadAll();
       renderAll();
-      statusEl.textContent = `Loaded ${new Date().toLocaleTimeString()}`;
-      statusEl.classList.remove("is-error");
+      if (failed.length) {
+        statusEl.textContent = `Loaded ${new Date().toLocaleTimeString()} - ${failed.join(", ")} timed out, showing last-known data for ${failed.length === 1 ? "it" : "those"}`;
+        statusEl.classList.add("is-error");
+      } else {
+        statusEl.textContent = `Loaded ${new Date().toLocaleTimeString()}`;
+        statusEl.classList.remove("is-error");
+      }
     } catch (err) {
       console.error(err);
       statusEl.textContent = `Load failed: ${err.message || err}`;

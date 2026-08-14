@@ -445,6 +445,46 @@ const CHART = (() => {
         svg.appendChild(hit);
       }
     });
+
+    // Scrub cursor: a vertical line tracking the pointer across the whole
+    // plot (all lanes at once, not per-segment), reporting the exact
+    // hovered time via opts.onScrub - e.g. to move a marker on a map to
+    // "where was this vehicle at this instant." Listened for at the svg
+    // level (not a dedicated hit-rect) so it fires everywhere in the plot
+    // area, including over segment bars, without fighting their own
+    // pointermove handlers for tooltips - both run off the same event.
+    if (opts.onScrub) {
+      const plotBottom = margin.top + lanes.length * (laneH + laneGap) - laneGap;
+      const cursor = el("line", {
+        x1: 0,
+        x2: 0,
+        y1: margin.top,
+        y2: plotBottom,
+        class: "timeline-cursor",
+        visibility: "hidden",
+      });
+      svg.appendChild(cursor);
+
+      svg.addEventListener("pointermove", (e) => {
+        const rect = svg.getBoundingClientRect();
+        const px = ((e.clientX - rect.left) / rect.width) * width;
+        const py = ((e.clientY - rect.top) / rect.height) * height;
+        if (px < margin.left || px > margin.left + innerW || py < margin.top || py > plotBottom) {
+          cursor.setAttribute("visibility", "hidden");
+          opts.onScrub(null);
+          return;
+        }
+        cursor.setAttribute("visibility", "visible");
+        cursor.setAttribute("x1", px);
+        cursor.setAttribute("x2", px);
+        const t = rMin + ((px - margin.left) / innerW) * rSpan;
+        opts.onScrub(new Date(t));
+      });
+      svg.addEventListener("pointerleave", () => {
+        cursor.setAttribute("visibility", "hidden");
+        opts.onScrub(null);
+      });
+    }
   }
 
   return { lineChart, barChart, timelineChart };

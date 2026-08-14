@@ -13,6 +13,8 @@
   let lastTimelineRender = null; // { lanes, rangeStart, rangeEnd } - so a resize can redraw without re-fetching
   let misuseMap = null;
   let misuseMapLayers = [];
+  let scrubMarker = null;
+  let currentHistory = []; // raw position pings for the vehicle currently open in the detail panel
   let loading = false;
 
   // ---- formatting -------------------------------------------------------
@@ -334,7 +336,73 @@
       { label: "Yango rides", segments: rideSegments },
     ];
     lastTimelineRender = { lanes, rangeStart, rangeEnd };
-    CHART.timelineChart(svg, lanes, { rangeStart, rangeEnd });
+    CHART.timelineChart(svg, lanes, { rangeStart, rangeEnd, onScrub: handleScrub });
+  }
+
+  function fmtScrubTime(date) {
+    return date.toLocaleString("en-US", {
+      timeZone: CONFIG.TIMEZONE,
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  const SCRUB_DEFAULT_TEXT = "the highlighted dot below follows the exact moment you're pointing at";
+
+  // Called continuously while hovering the timeline (see chart.js's
+  // timelineChart onScrub option) - finds the raw position ping closest to
+  // the hovered time and moves a marker there, so "when" and "where" read
+  // together instead of needing to mentally cross-reference two panels.
+  // date is null when the pointer isn't over the plot area at all.
+  function handleScrub(date) {
+    const readout = document.getElementById("misuse-scrub-readout");
+    if (!date || !currentHistory.length || !misuseMap) {
+      if (scrubMarker) {
+        misuseMap.removeLayer(scrubMarker);
+        scrubMarker = null;
+      }
+      if (readout) readout.textContent = SCRUB_DEFAULT_TEXT;
+      return;
+    }
+
+    let nearest = null;
+    let bestDiffMs = Infinity;
+    for (const p of currentHistory) {
+      if (p.latitude == null) continue;
+      const diffMs = Math.abs(new Date(p.polled_at).getTime() - date.getTime());
+      if (diffMs < bestDiffMs) {
+        bestDiffMs = diffMs;
+        nearest = p;
+      }
+    }
+
+    // Scrubbing into a GPS-offline gap: there's genuinely no position to
+    // show, so say that rather than snapping to a stale, misleadingly
+    // precise-looking dot from well outside this moment.
+    if (!nearest || bestDiffMs > CONFIG.MAX_GAP_MINUTES * 60000) {
+      if (scrubMarker) {
+        misuseMap.removeLayer(scrubMarker);
+        scrubMarker = null;
+      }
+      if (readout) readout.textContent = `no GPS data around ${fmtScrubTime(date)}`;
+      return;
+    }
+
+    const latlng = [nearest.latitude, nearest.longitude];
+    if (!scrubMarker) {
+      scrubMarker = L.circleMarker(latlng, {
+        radius: 8,
+        color: cssVar("--critical"),
+        weight: 3,
+        fillColor: cssVar("--critical"),
+        fillOpacity: 0.9,
+      }).addTo(misuseMap);
+    } else {
+      scrubMarker.setLatLng(latlng);
+    }
+    if (readout) readout.textContent = `showing position at ${fmtScrubTime(new Date(nearest.polled_at))}`;
   }
 
   // Draws the raw trail (grey, broken at the same gaps the timeline shows -
@@ -349,6 +417,10 @@
     }
     for (const layer of misuseMapLayers) misuseMap.removeLayer(layer);
     misuseMapLayers = [];
+    if (scrubMarker) {
+      misuseMap.removeLayer(scrubMarker);
+      scrubMarker = null;
+    }
 
     const pts = history.filter((r) => r.latitude != null && new Date(r.polled_at) >= rangeStart);
     if (!pts.length) return;
@@ -437,8 +509,9 @@
       console.error(err);
     }
 
-    renderMisuseTimeline(segments, rides, history, rangeStart, rangeEnd);
+    currentHistory = history; // scrub lookups (handleScrub) read this
     renderMisuseMap(segments, history, rangeStart);
+    renderMisuseTimeline(segments, rides, history, rangeStart, rangeEnd);
   }
 
   // ---- orchestration --------------------------------------------------
@@ -477,7 +550,7 @@
     window.addEventListener("resize", () => {
       if (lastTimelineRender) {
         const { lanes, rangeStart, rangeEnd } = lastTimelineRender;
-        CHART.timelineChart(document.getElementById("chart-misuse-timeline"), lanes, { rangeStart, rangeEnd });
+        CHART.timelineChart(document.getElementById("chart-misuse-timeline"), lanes, { rangeStart, rangeEnd, onScrub: handleScrub });
       }
     });
   }
