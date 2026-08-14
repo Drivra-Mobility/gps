@@ -13,6 +13,7 @@
   let editingImei = null; // which mapping row is currently being edited, if any
   let expandedHistoryImei = null; // which vehicle's history is expanded, if any
   let selectedMisuseImei = null; // which misuse row's detail panel is open, if any
+  let lastTimelineRender = null; // { lanes, rangeStart, rangeEnd } - so a resize can redraw without re-fetching
   let loading = false;
 
   // ---- formatting -------------------------------------------------------
@@ -92,13 +93,6 @@
 
   // ---- data loading -----------------------------------------------------
 
-  function currentMappingByImei() {
-    const map = new Map();
-    for (const m of mappings) {
-      if (m.valid_to === null) map.set(m.imei_no, m);
-    }
-    return map;
-  }
   function historyByImei(imei) {
     return mappings.filter((m) => m.imei_no === imei).sort((a, b) => new Date(b.valid_from) - new Date(a.valid_from));
   }
@@ -238,7 +232,7 @@
       tbody.innerHTML = '<tr><td colspan="5" class="empty">No vehicles reporting.</td></tr>';
       return;
     }
-    const current = currentMappingByImei();
+    const current = API.currentDriverByImei(mappings);
 
     for (const row of latestRows) {
       const imei = row.imei_no;
@@ -430,7 +424,7 @@
   }
 
   function renderMisuseTable() {
-    const current = currentMappingByImei();
+    const current = API.currentDriverByImei(mappings);
     const tbody = document.getElementById("misuse-tbody");
     tbody.innerHTML = "";
     if (!scores.length) {
@@ -471,6 +465,105 @@
     }
   }
 
+  // Classification -> timeline color/label. Reuses the same tokens the rest
+  // of the app already assigns to these ideas (state-moving for "confirmed
+  // good", state-parked for "explained", state-idle for "not resolved yet",
+  // critical for "flagged") rather than introducing new hues.
+  const CLASS_COLOR = {
+    ride_matched: "var(--state-moving)",
+    explained_near_base: "var(--state-parked)",
+    pending: "var(--state-idle)",
+    unmatched: "var(--critical)",
+    unmapped: "var(--text-muted)",
+  };
+  const CLASS_LABEL = {
+    ride_matched: "Ride matched",
+    explained_near_base: "Explained (near base)",
+    pending: "Pending",
+    unmatched: "Unmatched",
+    unmapped: "Unmapped",
+  };
+
+  // Builds the "GPS activity" lane's offline-gap bands from raw position
+  // history: any stretch with no reading at all for longer than
+  // MAX_GAP_MINUTES (same threshold every other gap-sensitive computation
+  // in this app already uses) is drawn as a gap, distinct from a genuine
+  // unmatched movement segment - a device that simply wasn't reporting is
+  // a different problem than one that was moving with no ride to show for it.
+  function computeOfflineGaps(history, rangeStart, rangeEnd) {
+    const gaps = [];
+    if (!history.length) {
+      gaps.push({ start: rangeStart, end: rangeEnd });
+      return gaps;
+    }
+    const threshold = CONFIG.MAX_GAP_MINUTES * 60000;
+    const first = new Date(history[0].polled_at);
+    if (first.getTime() - rangeStart.getTime() > threshold) gaps.push({ start: rangeStart, end: first });
+    for (let i = 1; i < history.length; i++) {
+      const prev = new Date(history[i - 1].polled_at);
+      const cur = new Date(history[i].polled_at);
+      if (cur.getTime() - prev.getTime() > threshold) gaps.push({ start: prev, end: cur });
+    }
+    const last = new Date(history[history.length - 1].polled_at);
+    if (rangeEnd.getTime() - last.getTime() > threshold) gaps.push({ start: last, end: rangeEnd });
+    return gaps;
+  }
+
+  // segments/rides are whatever already loaded for the full lookback -
+  // reused here (filtered to the timeline's shorter recent window) rather
+  // than re-fetched. Only the raw position history is a new fetch, since
+  // that's the one thing neither existing query returns.
+  async function renderMisuseTimeline(imei, segments, rides) {
+    const svg = document.getElementById("chart-misuse-timeline");
+    const hours = CONFIG.MISUSE_TIMELINE_HOURS;
+    const rangeEnd = new Date();
+    const rangeStart = new Date(rangeEnd.getTime() - hours * 3600000);
+    document.getElementById("misuse-timeline-sub").textContent = `last ${Math.round(hours / 24)} days`;
+
+    let history = [];
+    try {
+      history = await API.fetchVehicleHistory(imei, hours);
+    } catch (err) {
+      console.error(err);
+    }
+
+    const gpsSegments = computeOfflineGaps(history, rangeStart, rangeEnd).map((g) => ({
+      start: g.start,
+      end: g.end,
+      label: "GPS offline",
+      color: "var(--state-offline)",
+    }));
+    for (const s of segments) {
+      const segEnd = new Date(s.segment_end);
+      if (segEnd < rangeStart || segEnd > rangeEnd) continue;
+      gpsSegments.push({
+        start: new Date(s.segment_start),
+        end: segEnd,
+        label: CLASS_LABEL[s.classification] || s.classification,
+        sub: `${fmtHm(s.duration_seconds)} · ${fmtKm(s.distance_km)}`,
+        color: CLASS_COLOR[s.classification] || "var(--text-muted)",
+      });
+    }
+
+    const rideSegments = rides
+      .filter((r) => r.booked_at && r.ended_at)
+      .filter((r) => new Date(r.ended_at) >= rangeStart && new Date(r.booked_at) <= rangeEnd)
+      .map((r) => ({
+        start: new Date(r.booked_at),
+        end: new Date(r.ended_at),
+        label: "Yango ride",
+        sub: r.category || undefined,
+        color: "var(--series-revenue)",
+      }));
+
+    const lanes = [
+      { label: "GPS activity", segments: gpsSegments },
+      { label: "Yango rides", segments: rideSegments },
+    ];
+    lastTimelineRender = { lanes, rangeStart, rangeEnd };
+    CHART.timelineChart(svg, lanes, { rangeStart, rangeEnd });
+  }
+
   async function selectMisuseRow(imei) {
     selectedMisuseImei = imei;
     renderMisuseTable();
@@ -490,8 +583,9 @@
     const ridesTbody = document.getElementById("misuse-rides-tbody");
     ridesTbody.innerHTML = '<tr><td colspan="3" class="empty">Loading…</td></tr>';
 
+    let segments = [];
     try {
-      const segments = await API.fetchVehicleRideSegments({ imei, startDate, endDate });
+      segments = await API.fetchVehicleRideSegments({ imei, startDate, endDate });
       segTbody.innerHTML = "";
       if (!segments.length) {
         segTbody.innerHTML = '<tr><td colspan="5" class="empty">No movement segments in this range.</td></tr>';
@@ -519,33 +613,40 @@
       segTbody.innerHTML = `<tr><td colspan="5" class="empty">Failed to load: ${err.message || err}</td></tr>`;
     }
 
-    const current = currentMappingByImei();
+    const current = API.currentDriverByImei(mappings);
     const mapping = current.get(imei);
+    let rides = [];
     if (!mapping) {
       ridesTbody.innerHTML = '<tr><td colspan="3" class="empty">Vehicle is unmapped - no driver to look up rides for.</td></tr>';
-      return;
-    }
-    try {
-      const rides = await API.fetchDriverRides({ phone: mapping.driver_phone, startDate, endDate });
-      ridesTbody.innerHTML = "";
-      if (!rides.length) {
-        ridesTbody.innerHTML = '<tr><td colspan="3" class="empty">No rides in this range.</td></tr>';
-      } else {
-        for (const r of rides) {
-          const tr = document.createElement("tr");
-          const startTd = document.createElement("td");
-          startTd.textContent = fmtDateTime(r.booked_at);
-          const endTd = document.createElement("td");
-          endTd.textContent = fmtDateTime(r.ended_at);
-          const catTd = document.createElement("td");
-          catTd.textContent = r.category || "—";
-          tr.append(startTd, endTd, catTd);
-          ridesTbody.appendChild(tr);
+    } else {
+      try {
+        rides = await API.fetchDriverRides({ phone: mapping.driver_phone, startDate, endDate });
+        ridesTbody.innerHTML = "";
+        if (!rides.length) {
+          ridesTbody.innerHTML = '<tr><td colspan="3" class="empty">No rides in this range.</td></tr>';
+        } else {
+          for (const r of rides) {
+            const tr = document.createElement("tr");
+            const startTd = document.createElement("td");
+            startTd.textContent = fmtDateTime(r.booked_at);
+            const endTd = document.createElement("td");
+            endTd.textContent = fmtDateTime(r.ended_at);
+            const catTd = document.createElement("td");
+            catTd.textContent = r.category || "—";
+            tr.append(startTd, endTd, catTd);
+            ridesTbody.appendChild(tr);
+          }
         }
+      } catch (err) {
+        console.error(err);
+        ridesTbody.innerHTML = `<tr><td colspan="3" class="empty">Failed to load: ${err.message || err}</td></tr>`;
       }
+    }
+
+    try {
+      await renderMisuseTimeline(imei, segments, rides);
     } catch (err) {
       console.error(err);
-      ridesTbody.innerHTML = `<tr><td colspan="3" class="empty">Failed to load: ${err.message || err}</td></tr>`;
     }
   }
 
@@ -577,11 +678,18 @@
     document.getElementById("sign-out").addEventListener("click", () => AUTH.signOut());
     document.getElementById("misuse-lookback").addEventListener("change", async () => {
       selectedMisuseImei = null;
+      lastTimelineRender = null;
       document.getElementById("misuse-detail-panel").hidden = true;
       await loadMisuse();
       renderMisuseTable();
     });
     refresh();
+    window.addEventListener("resize", () => {
+      if (lastTimelineRender) {
+        const { lanes, rangeStart, rangeEnd } = lastTimelineRender;
+        CHART.timelineChart(document.getElementById("chart-misuse-timeline"), lanes, { rangeStart, rangeEnd });
+      }
+    });
   }
 
   initTheme();

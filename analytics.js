@@ -16,6 +16,7 @@
   let anomalies = [];
   let rideMatchMetrics = [];
   let revenueMetrics = [];
+  let driverByImei = new Map(); // imei -> current vehicle_driver_mapping row
   let daySortState = { key: "local_date", dir: -1 };
   let visitsSortState = { key: "duration_seconds", dir: -1 };
   let anomaliesSortState = { key: "detected_at", dir: -1 };
@@ -139,6 +140,11 @@
     return (row && (row.vehicle_no || row.vehicle_name)) || imei;
   }
 
+  function driverName(imei) {
+    const m = driverByImei.get(imei);
+    return m ? m.driver_name || m.driver_phone : null;
+  }
+
   function populateVehicleSelect(select, { includeAll }) {
     const prev = select.value;
     select.innerHTML = "";
@@ -165,7 +171,7 @@
   async function loadAll() {
     const startDate = document.getElementById("range-start").value;
     const endDate = document.getElementById("range-end").value;
-    const [latest, days, ongoingRaw, recent, anomaliesRaw, rideMatch, revenue] = await Promise.all([
+    const [latest, days, ongoingRaw, recent, anomaliesRaw, rideMatch, revenue, mappings] = await Promise.all([
       API.fetchLatest(),
       API.fetchDailyMetrics({ startDate, endDate }),
       API.fetchMaintenanceVisits({ startDate: null }),
@@ -173,6 +179,7 @@
       API.fetchAnomalies({ startDate, endDate }),
       API.fetchRideMatchDailyMetrics({ startDate, endDate }),
       API.fetchVehicleRevenueDailyMetrics({ startDate, endDate }),
+      API.fetchVehicleDriverMappings(),
     ]);
     latestRows = latest;
     dayMetrics = days;
@@ -181,6 +188,7 @@
     anomalies = anomaliesRaw;
     rideMatchMetrics = rideMatch;
     revenueMetrics = revenue;
+    driverByImei = API.currentDriverByImei(mappings);
 
     populateVehicleSelect(document.getElementById("vehicle-filter"), { includeAll: true });
     populateVehicleSelect(document.getElementById("deep-dive-vehicle"), { includeAll: false });
@@ -204,20 +212,27 @@
     const opportunity = [...byVehicle.entries()]
       .map(([imei, v]) => ({
         label: v.vehicle_no || imei,
+        sub: driverName(imei),
         value: v.rows.reduce((s, r) => s + (r.idle_seconds || 0) + (r.maintenance_seconds || 0), 0),
       }))
       .filter((x) => x.value > 0);
     CHART.barChart(document.getElementById("chart-lb-opportunity"), opportunity, {
       valueLabel: fmtHm,
       color: "var(--state-idle)",
+      limit: null,
     });
 
     // Currently in maintenance longest.
-    const maintNow = ongoingVisits.map((v) => ({ label: v.vehicle_no || v.imei_no, value: v.duration_seconds }));
+    const maintNow = ongoingVisits.map((v) => ({
+      label: v.vehicle_no || v.imei_no,
+      sub: driverName(v.imei_no),
+      value: v.duration_seconds,
+    }));
     CHART.barChart(document.getElementById("chart-lb-maintenance-now"), maintNow, {
       valueLabel: fmtHm,
       tipUnit: "so far",
       color: "var(--state-maintenance)",
+      limit: null,
     });
 
     // Lowest utilisation (moving seconds / tracked seconds, weighted).
@@ -225,26 +240,28 @@
       .map(([imei, v]) => {
         const moving = v.rows.reduce((s, r) => s + (r.moving_seconds || 0), 0);
         const tracked = v.rows.reduce((s, r) => s + (r.tracked_seconds || 0), 0);
-        return { label: v.vehicle_no || imei, value: tracked > 0 ? (100 * moving) / tracked : null };
+        return { label: v.vehicle_no || imei, sub: driverName(imei), value: tracked > 0 ? (100 * moving) / tracked : null };
       })
       .filter((x) => x.value != null);
     CHART.barChart(document.getElementById("chart-lb-utilisation"), utilisation, {
       valueLabel: fmtPct,
       ascending: true,
       color: "var(--state-moving)",
+      limit: null,
     });
 
     // Latest average morning departure.
     const departure = [...byVehicle.entries()]
       .map(([imei, v]) => {
         const times = v.rows.map((r) => r.first_departure_from_parking).filter(Boolean);
-        return { label: v.vehicle_no || imei, value: times.length ? avgLocalMinutes(times) : null };
+        return { label: v.vehicle_no || imei, sub: driverName(imei), value: times.length ? avgLocalMinutes(times) : null };
       })
       .filter((x) => x.value != null);
     CHART.barChart(document.getElementById("chart-lb-departure"), departure, {
       valueLabel: fmtMinutesOfDay,
       tipUnit: "avg",
       color: "var(--state-parked)",
+      limit: null,
     });
 
     // Parked-overnight compliance.
@@ -252,13 +269,14 @@
       .map(([imei, v]) => {
         const nights = v.rows.length;
         const compliant = v.rows.filter((r) => r.parked_overnight).length;
-        return { label: v.vehicle_no || imei, value: nights ? (100 * compliant) / nights : null };
+        return { label: v.vehicle_no || imei, sub: driverName(imei), value: nights ? (100 * compliant) / nights : null };
       })
       .filter((x) => x.value != null);
     CHART.barChart(document.getElementById("chart-lb-overnight"), overnight, {
       valueLabel: fmtPct,
       ascending: true,
       color: "var(--state-parked)",
+      limit: null,
     });
 
     // Most GPS anomalies.
@@ -270,12 +288,14 @@
     }
     const anomalyBoard = [...anomalyCounts.entries()].map(([imei, count]) => ({
       label: anomalyLabels.get(imei),
+      sub: driverName(imei),
       value: count,
     }));
     CHART.barChart(document.getElementById("chart-lb-anomalies"), anomalyBoard, {
       valueLabel: (v) => String(Math.round(v)),
       tipUnit: "detections",
       color: "var(--critical)",
+      limit: null,
     });
 
     // Lowest ride-corroborated % - mapped vehicles only (mapped_moving_seconds
@@ -289,13 +309,14 @@
       v.mapped += r.mapped_moving_seconds || 0;
       v.matched += r.ride_matched_seconds || 0;
     }
-    const rideBoard = [...rideByVehicle.values()]
-      .filter((v) => v.mapped > 0)
-      .map((v) => ({ label: v.name, value: (100 * v.matched) / v.mapped }));
+    const rideBoard = [...rideByVehicle.entries()]
+      .filter(([, v]) => v.mapped > 0)
+      .map(([imei, v]) => ({ label: v.name, sub: driverName(imei), value: (100 * v.matched) / v.mapped }));
     CHART.barChart(document.getElementById("chart-lb-ride-corroboration"), rideBoard, {
       valueLabel: fmtPct,
       ascending: true,
       color: "var(--series-revenue)",
+      limit: null,
     });
 
     // Revenue per vehicle - keyed by vehicleLabel() (fetchLatest()-backed,
@@ -307,11 +328,13 @@
     }
     const revenueBoard = [...revenueByImei.entries()].map(([imei, revenue]) => ({
       label: vehicleLabel(imei),
+      sub: driverName(imei),
       value: revenue,
     }));
     CHART.barChart(document.getElementById("chart-revenue-vehicle"), revenueBoard, {
       valueLabel: fmtNpr,
       color: "var(--series-revenue)",
+      limit: null,
     });
 
     // Revenue per active hour - revenue divided by this vehicle's total
@@ -327,6 +350,7 @@
         const movingSeconds = movingSecondsByImei.get(imei) || 0;
         return {
           label: vehicleLabel(imei),
+          sub: driverName(imei),
           value: movingSeconds >= 1800 ? revenue / (movingSeconds / 3600) : null,
         };
       })
@@ -336,6 +360,7 @@
       tipUnit: "/ moving hour",
       ascending: true,
       color: "var(--series-revenue)",
+      limit: null,
     });
   }
 
@@ -388,6 +413,7 @@
     if (key === "first_departure_from_parking")
       return row.first_departure_from_parking ? new Date(row.first_departure_from_parking).getTime() : Infinity;
     if (key === "parked_overnight") return row.parked_overnight ? 1 : 0;
+    if (key === "driver") return driverName(row.imei_no) || "";
     if (key === "local_date" || key === "vehicle_no") return row[key] || "";
     return row[key] ?? 0;
   }
@@ -409,7 +435,7 @@
     const tbody = document.getElementById("day-tbody");
     tbody.innerHTML = "";
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="10" class="empty">No data in this range.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="empty">No data in this range.</td></tr>';
       return;
     }
     for (const r of rows) {
@@ -418,6 +444,7 @@
       const cells = [
         fmtDateLabel(r.local_date),
         r.vehicle_no || r.imei_no,
+        driverName(r.imei_no) || "—",
         fmtHm(r.moving_seconds),
         fmtHm(r.idle_seconds),
         fmtHm(r.parked_seconds),
@@ -429,7 +456,7 @@
       ];
       cells.forEach((text, i) => {
         const td = document.createElement("td");
-        if (i >= 2 && i <= 7) td.className = "num";
+        if (i >= 3 && i <= 8) td.className = "num";
         td.textContent = text;
         tr.appendChild(td);
       });

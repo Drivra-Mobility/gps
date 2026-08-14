@@ -148,6 +148,29 @@
           <h3 id="misuse-detail-title">Vehicle detail</h3>
           <p class="card-sub" id="misuse-detail-sub"></p>
 
+          <h4>
+            Timeline
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="GPS activity vs. Yango rides for the most recent days, so you can see WHY a segment looks unmatched - not just that it does. A gap in the GPS lane means the device reported nothing at all in that stretch (offline/no signal), which is a different problem than an unmatched segment (device was reporting movement, but no ride overlapped it). An unmatched bar sitting right next to (or inside) a GPS-offline gap is weaker evidence of misuse than one with full GPS coverage around it."
+              aria-label="GPS activity vs. Yango rides for the most recent days. A gap in the GPS lane means the device reported nothing (offline), different from an unmatched segment where it reported movement with no overlapping ride."
+            ></span>
+          </h4>
+          <p class="card-sub" id="misuse-timeline-sub"></p>
+          <div class="timeline-legend">
+            <span class="timeline-legend-item"><span class="swatch swatch-moving" aria-hidden="true"></span>Ride matched</span>
+            <span class="timeline-legend-item"><span class="swatch swatch-parked" aria-hidden="true"></span>Explained (near base)</span>
+            <span class="timeline-legend-item"><span class="swatch swatch-idle" aria-hidden="true"></span>Pending</span>
+            <span class="timeline-legend-item"><span class="swatch swatch-critical" aria-hidden="true"></span>Unmatched</span>
+            <span class="timeline-legend-item"><span class="swatch swatch-offline" aria-hidden="true"></span>GPS offline</span>
+            <span class="timeline-legend-item"><span class="swatch swatch-revenue" aria-hidden="true"></span>Yango ride</span>
+          </div>
+          <div class="chart-wrap">
+            <svg id="chart-misuse-timeline" class="chart-svg" data-tip="tip-misuse-timeline" role="img" aria-label="GPS activity vs. Yango rides timeline"></svg>
+            <div id="tip-misuse-timeline" class="tip" hidden></div>
+          </div>
+
           <h4>Movement segments</h4>
           <div class="table-wrap table-wrap-scroll">
             <table id="misuse-segments-table">
@@ -199,6 +222,7 @@
 
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
+    <script src="chart.js"></script>
     <script src="auth.js"></script>
     <script src="api.js"></script>
     <script src="drivers.js"></script>

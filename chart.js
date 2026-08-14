@@ -204,9 +204,12 @@ const CHART = (() => {
       if (tipEl) {
         tipEl.hidden = false;
         tipEl.innerHTML = `<div>${tipTitle}</div><div>${xLabel(d.x)} — <strong>${valueLabel(d.y)}</strong></div>`;
-        const wrapRect = svg.parentElement.getBoundingClientRect();
-        tipEl.style.left = `${clientX - wrapRect.left + 12}px`;
-        tipEl.style.top = `${clientY - wrapRect.top - 12}px`;
+        // Viewport-relative (position: fixed), not container-relative - a
+        // container-relative tip gets silently clipped by any ancestor
+        // .card's overflow:hidden (rounded-corner containment) whenever the
+        // tip would render past the card's edge.
+        tipEl.style.left = `${clientX + 12}px`;
+        tipEl.style.top = `${clientY - 12}px`;
       }
     }
     function hide() {
@@ -219,18 +222,23 @@ const CHART = (() => {
   }
 
   // ---- Horizontal bar chart ----------------------------------------------
-  // data: [{label: string, value: number}], any order (chart sorts desc by
-  // default - pass ascending:true for "worst/lowest first" rankings, e.g.
-  // utilisation or compliance percentages where a small bar is the one that
-  // needs attention).
+  // data: [{label: string, value: number, sub?: string}], any order (chart
+  // sorts desc by default - pass ascending:true for "worst/lowest first"
+  // rankings, e.g. utilisation or compliance percentages where a small bar
+  // is the one that needs attention). `sub`, if given (e.g. a driver name),
+  // shows as a second tooltip line under the label - never on the bar
+  // itself, so it doesn't compete with the label column's fixed width.
+  // `limit` caps how many bars render after sorting - default 10 (a quick
+  // top-N read); pass null/Infinity to show every row (e.g. the whole
+  // fleet).
   function barChart(svg, data, opts) {
-    const { valueLabel = (v) => String(Math.round(v)), tipUnit = "", color, ascending = false } = opts;
+    const { valueLabel = (v) => String(Math.round(v)), tipUnit = "", color, ascending = false, limit = 10 } = opts;
     svg.innerHTML = "";
     const rootStyle = getComputedStyle(document.documentElement);
     const barColor = color || rootStyle.getPropertyValue("--state-moving").trim();
 
     const sortFn = ascending ? (a, b) => a.value - b.value : (a, b) => b.value - a.value;
-    const sorted = [...data].sort(sortFn).slice(0, 10);
+    const sorted = [...data].sort(sortFn).slice(0, limit == null ? data.length : limit);
     const width = svg.clientWidth || 600;
     const barH = 20;
     const gap = 10;
@@ -306,10 +314,12 @@ const CHART = (() => {
         bar.setAttribute("opacity", "0.85");
         if (tipEl) {
           tipEl.hidden = false;
-          tipEl.innerHTML = `<div>${d.label}</div><div><strong>${valueLabel(d.value)}</strong> ${tipUnit}</div>`;
-          const wrapRect = svg.parentElement.getBoundingClientRect();
-          tipEl.style.left = `${e.clientX - wrapRect.left + 12}px`;
-          tipEl.style.top = `${e.clientY - wrapRect.top - 12}px`;
+          const subLine = d.sub ? `<div>${d.sub}</div>` : "";
+          tipEl.innerHTML = `<div>${d.label}</div>${subLine}<div><strong>${valueLabel(d.value)}</strong> ${tipUnit}</div>`;
+          // Viewport-relative (position: fixed) - see lineChart's showAt()
+          // for why this can't be container-relative.
+          tipEl.style.left = `${e.clientX + 12}px`;
+          tipEl.style.top = `${e.clientY - 12}px`;
         }
       });
       hit.addEventListener("pointerleave", () => {
@@ -320,5 +330,98 @@ const CHART = (() => {
     });
   }
 
-  return { lineChart, barChart };
+  // ---- Timeline (swimlane) chart -----------------------------------------
+  // lanes: [{ label: string, segments: [{start: Date, end: Date, label:
+  // string, sub?: string, color: css-color}] }]. Within a lane, segments
+  // are drawn in the given order - later ones paint over earlier ones, so
+  // pass background bands (e.g. a "GPS offline" gap) before foreground ones
+  // that should sit on top of them. opts: { rangeStart: Date, rangeEnd: Date }.
+  function timelineChart(svg, lanes, opts) {
+    const { rangeStart, rangeEnd } = opts;
+    svg.innerHTML = "";
+    const width = svg.clientWidth || 600;
+    const laneH = 26;
+    const laneGap = 16;
+    const margin = { top: 10, right: 14, bottom: 26, left: 110 };
+    const innerW = width - margin.left - margin.right;
+    const height = margin.top + margin.bottom + lanes.length * (laneH + laneGap) - laneGap;
+    svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    svg.style.height = `${height}px`;
+
+    const totalSegments = lanes.reduce((s, lane) => s + lane.segments.length, 0);
+    if (!totalSegments) {
+      const t = el("text", { x: width / 2, y: height / 2, "text-anchor": "middle", class: "axis-label" });
+      t.textContent = "No data in this window";
+      svg.appendChild(t);
+      return;
+    }
+
+    const rMin = rangeStart.getTime();
+    const rMax = rangeEnd.getTime();
+    const rSpan = Math.max(1, rMax - rMin);
+    const xScale = (t) => margin.left + ((t - rMin) / rSpan) * innerW;
+
+    function fmtRange(start, end) {
+      const timeOpts = { hour: "2-digit", minute: "2-digit" };
+      const sameDay = start.toDateString() === end.toDateString();
+      const startStr = start.toLocaleString([], sameDay ? timeOpts : { month: "short", day: "numeric", ...timeOpts });
+      return `${startStr} – ${end.toLocaleTimeString([], timeOpts)}`;
+    }
+
+    // X-axis: first / middle / last timestamp.
+    [rMin, rMin + rSpan / 2, rMax].forEach((t, idx) => {
+      const anchor = idx === 0 ? "start" : idx === 2 ? "end" : "middle";
+      const label = el("text", { x: xScale(t), y: height - 6, "text-anchor": anchor, class: "axis-label" });
+      label.textContent = new Date(t).toLocaleString([], { month: "short", day: "numeric" });
+      svg.appendChild(label);
+    });
+
+    const tipId = svg.dataset.tip;
+    const tipEl = tipId ? document.getElementById(tipId) : null;
+
+    lanes.forEach((lane, li) => {
+      const y = margin.top + li * (laneH + laneGap);
+
+      const laneLabel = el("text", {
+        x: margin.left - 10,
+        y: y + laneH / 2 + 4,
+        "text-anchor": "end",
+        class: "axis-label",
+      });
+      laneLabel.textContent = lane.label;
+      svg.appendChild(laneLabel);
+
+      svg.appendChild(
+        el("rect", { x: margin.left, y, width: innerW, height: laneH, rx: 4, class: "timeline-track" })
+      );
+
+      for (const seg of lane.segments) {
+        const x1 = Math.max(margin.left, xScale(seg.start.getTime()));
+        const x2 = Math.min(margin.left + innerW, xScale(seg.end.getTime()));
+        const w = Math.max(2, x2 - x1);
+        const bar = el("rect", { x: x1, y, width: w, height: laneH, rx: 3, style: `fill:${seg.color}` });
+        svg.appendChild(bar);
+
+        const hit = el("rect", { x: x1, y, width: w, height: laneH, fill: "transparent" });
+        hit.style.cursor = "default";
+        hit.addEventListener("pointermove", (e) => {
+          bar.setAttribute("opacity", "0.8");
+          if (tipEl) {
+            tipEl.hidden = false;
+            const subLine = seg.sub ? `<div>${seg.sub}</div>` : "";
+            tipEl.innerHTML = `<div>${seg.label}</div>${subLine}<div>${fmtRange(seg.start, seg.end)}</div>`;
+            tipEl.style.left = `${e.clientX + 12}px`;
+            tipEl.style.top = `${e.clientY - 12}px`;
+          }
+        });
+        hit.addEventListener("pointerleave", () => {
+          bar.setAttribute("opacity", "1");
+          if (tipEl) tipEl.hidden = true;
+        });
+        svg.appendChild(hit);
+      }
+    });
+  }
+
+  return { lineChart, barChart, timelineChart };
 })();

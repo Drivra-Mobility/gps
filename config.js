@@ -129,4 +129,12 @@ const CONFIG = {
   MISUSE_SCORE_WEIGHTS: { magnitude: 0.5, persistence: 0.3, level: 0.2 },
   MISUSE_TIER_HIGH: 60,
   MISUSE_TIER_MEDIUM: 25,
+
+  // Evidence timeline (drivers.html detail panel): raw per-vehicle position
+  // history, fetched unaggregated to detect GPS-offline gaps client-side -
+  // unlike everything else on that page, this isn't a bounded Postgres
+  // aggregate, so it needs its own small window to stay well under
+  // PostgREST's row cap. 72h matches vehicle.html's own longest "history
+  // window" preset - the app's existing ceiling for a raw per-vehicle fetch.
+  MISUSE_TIMELINE_HOURS: 72,
 };

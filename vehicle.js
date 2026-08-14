@@ -8,6 +8,7 @@
   const imei = new URLSearchParams(location.search).get("imei");
 
   let rows = [];
+  let currentDriver = null; // this vehicle's current vehicle_driver_mapping row, if any
   let map;
   let marker;
   let trailLine;
@@ -49,14 +50,23 @@
 
   async function loadAll() {
     const hours = Number(document.getElementById("window").value);
-    rows = await API.fetchVehicleHistory(imei, hours);
+    const [history, mappings] = await Promise.all([
+      API.fetchVehicleHistory(imei, hours),
+      API.fetchVehicleDriverMappings(),
+    ]);
+    rows = history;
+    currentDriver = API.currentDriverByImei(mappings).get(imei) || null;
   }
 
   function renderHeader(latest) {
     document.getElementById("veh-title").textContent = latest.vehicle_no || latest.vehicle_name || imei;
-    const bits = [latest.company, latest.branch, latest.device_model, `IMEI ${latest.imei_no}`].filter(
-      Boolean
-    );
+    const bits = [
+      currentDriver ? `Driver: ${currentDriver.driver_name || currentDriver.driver_phone}` : "Unmapped - no driver on file",
+      latest.company,
+      latest.branch,
+      latest.device_model,
+      `IMEI ${latest.imei_no}`,
+    ].filter(Boolean);
     document.getElementById("veh-sub").textContent = bits.join(" · ");
     document.title = `${latest.vehicle_no || imei} — Fleet dashboard`;
   }
@@ -127,7 +137,8 @@
       marker.setIcon(icon);
     }
     const stateDuration = API.stateDurationFromHistory(rows, state);
-    marker.bindPopup(MAP.buildPopup(latest, state, { stateDuration }));
+    const driverName = currentDriver ? currentDriver.driver_name || currentDriver.driver_phone : null;
+    marker.bindPopup(MAP.buildPopup(latest, state, { stateDuration, driverName }));
   }
 
   function renderChart() {
@@ -209,7 +220,7 @@
       hopTd.textContent = hopM > 0 ? `${Math.round(hopM)} m` : "—";
       const locTd = document.createElement("td");
       locTd.className = "location";
-      locTd.textContent = r.location || "—";
+      locTd.textContent = r.location ? API.shortLocation(r.location) : "—";
 
       tr.append(tTd, sTd, spTd, hopTd, locTd);
       tbody.appendChild(tr);

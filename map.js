@@ -148,14 +148,18 @@ const MAP = (() => {
   // API.stateDurationFromHistory() run against whatever history window the
   // caller already has loaded - no extra query for this. sinceStart means
   // the streak runs to the edge of that window, so the true duration may be
-  // longer than reported ("at least", not exact).
+  // longer than reported ("at least", not exact). opts.driverName, if
+  // provided, is the vehicle's current mapped driver (see
+  // API.currentDriverByImei()) - shown first, above State.
   function buildPopup(row, state, opts = {}) {
     const box = document.createElement("div");
     const title = document.createElement("b");
     title.textContent = row.vehicle_no || row.vehicle_name || "Vehicle";
     box.appendChild(title);
 
-    const rows = [["State", STATE_LABEL[state] || state]];
+    const rows = [];
+    if (opts.driverName) rows.push(["Driver", opts.driverName]);
+    rows.push(["State", STATE_LABEL[state] || state]);
     if (opts.stateDuration && opts.stateDuration.seconds > 0) {
       const prefix = opts.stateDuration.sinceStart ? "at least " : "";
       rows.push(["Time in state", `${prefix}${fmtDuration(opts.stateDuration.seconds)}`]);
@@ -165,7 +169,7 @@ const MAP = (() => {
       ["Ignition", row.ignition || "—"],
       ["Last report", row.device_datetime ? new Date(row.device_datetime).toLocaleString() : "—"]
     );
-    if (row.location) rows.push(["Location", row.location]);
+    if (row.location) rows.push(["Location", API.shortLocation(row.location)]);
 
     for (const [k, v] of rows) {
       const line = document.createElement("div");

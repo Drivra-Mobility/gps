@@ -5,6 +5,7 @@
 
   let latestRows = [];
   let historyRows = [];
+  let driverByImei = new Map(); // imei -> current vehicle_driver_mapping row
   let grouped = new Map();
   let metrics = new Map(); // imei -> vehicleMetrics()
   let markers = new Map(); // imei -> Leaflet marker
@@ -77,9 +78,14 @@
 
   async function loadAll() {
     const hours = Number(document.getElementById("window").value);
-    const [latest, history] = await Promise.all([API.fetchLatest(), API.fetchHistorySince(hours)]);
+    const [latest, history, mappings] = await Promise.all([
+      API.fetchLatest(),
+      API.fetchHistorySince(hours),
+      API.fetchVehicleDriverMappings(),
+    ]);
     latestRows = latest;
     historyRows = history;
+    driverByImei = API.currentDriverByImei(mappings);
     grouped = API.groupByVehicle(history);
     metrics = new Map();
     for (const [imei, rows] of grouped.entries()) {
@@ -89,6 +95,11 @@
 
   function rowState(row) {
     return API.classify(row);
+  }
+
+  function driverName(imei) {
+    const m = driverByImei.get(imei);
+    return m ? m.driver_name || m.driver_phone : null;
   }
 
   // ---- KPIs ---------------------------------------------------------
@@ -181,6 +192,12 @@
     });
   }
 
+  function labelWithDriver(row) {
+    const base = row.vehicle_no || row.imei_no;
+    const driver = driverName(row.imei_no);
+    return driver ? `${base} · ${driver}` : base;
+  }
+
   function renderAttention() {
     const durations = [];
     for (const row of latestRows) {
@@ -189,7 +206,7 @@
       const d = API.stateDurationFromHistory(grouped.get(row.imei_no) || [], state);
       if (d.seconds <= 0) continue;
       durations.push({
-        name: row.vehicle_no || row.imei_no,
+        name: labelWithDriver(row),
         seconds: d.seconds,
         value: `${fmtDuration(d.seconds)}${d.sinceStart ? "+" : ""} ${state}`,
       });
@@ -204,7 +221,7 @@
     for (const row of latestRows) {
       const m = metrics.get(row.imei_no);
       if (!m || m.points < 2) continue;
-      utilisation.push({ name: row.vehicle_no || row.imei_no, pct: m.movingPct });
+      utilisation.push({ name: labelWithDriver(row), pct: m.movingPct });
     }
     utilisation.sort((a, b) => a.pct - b.pct);
     renderLeaderboardList(
@@ -280,6 +297,7 @@
         MAP.buildPopup(row, state, {
           link: `vehicle.html?imei=${encodeURIComponent(row.imei_no)}`,
           stateDuration,
+          driverName: driverName(row.imei_no),
         })
       );
     }
@@ -309,7 +327,7 @@
     const byVehicle = new Map(latestRows.map((r) => [r.imei_no, r.vehicle_no || r.imei_no]));
     const distanceData = [...metrics.entries()]
       .filter(([, m]) => m.distanceKm > 0)
-      .map(([imei, m]) => ({ label: byVehicle.get(imei) || imei, value: m.distanceKm }));
+      .map(([imei, m]) => ({ label: byVehicle.get(imei) || imei, value: m.distanceKm, sub: driverName(imei) }));
     CHART.barChart(document.getElementById("chart-distance"), distanceData, {
       valueLabel: (v) => v.toFixed(1),
       tipUnit: "km",
@@ -325,11 +343,12 @@
       return {
         imei: row.imei_no,
         vehicle_no: row.vehicle_no || row.imei_no,
+        driver: driverName(row.imei_no) || "—",
         state,
         speed: row.speed || 0,
         distance: m.distanceKm,
         ageSec: API.ageSeconds(row.device_datetime),
-        location: row.location || "—",
+        location: row.location ? API.shortLocation(row.location) : "—",
       };
     });
   }
@@ -353,7 +372,7 @@
     const rows = sortRows(tableRows());
     tbody.innerHTML = "";
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="empty">No vehicles reporting.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">No vehicles reporting.</td></tr>';
       return;
     }
     for (const r of rows) {
@@ -364,6 +383,9 @@
       link.href = `vehicle.html?imei=${encodeURIComponent(r.imei)}`;
       link.textContent = r.vehicle_no;
       vehTd.appendChild(link);
+
+      const driverTd = document.createElement("td");
+      driverTd.textContent = r.driver;
 
       const stateTd = document.createElement("td");
       const stateSpan = document.createElement("span");
@@ -387,7 +409,7 @@
       locTd.className = "location";
       locTd.textContent = r.location;
 
-      tr.append(vehTd, stateTd, speedTd, distTd, ageTd, locTd);
+      tr.append(vehTd, driverTd, stateTd, speedTd, distTd, ageTd, locTd);
       tbody.appendChild(tr);
     }
   }

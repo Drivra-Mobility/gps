@@ -354,6 +354,12 @@ input[type="date"] {
   background: transparent;
   border: 1.5px solid var(--state-offline);
 }
+.swatch-critical {
+  background: var(--critical);
+}
+.swatch-revenue {
+  background: var(--series-revenue);
+}
 
 /* ---------- cards ---------- */
 
@@ -504,6 +510,24 @@ input[type="date"] {
 .chart-wrap-sm .chart-svg {
   height: 170px;
 }
+.timeline-track {
+  fill: var(--page);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 4px 0 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+.timeline-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 .axis-label {
   font-size: 10px;
   fill: var(--text-muted);
@@ -543,9 +567,14 @@ input[type="date"] {
 }
 
 .tip {
-  position: absolute;
+  /* Viewport-relative, not container-relative: a .chart-wrap-relative tip
+     gets silently clipped by the nearest .card's overflow:hidden (used for
+     rounded-corner containment) whenever it would render past the card's
+     edge - fixed positioning escapes that clip entirely. chart.js positions
+     it from raw pointer clientX/clientY accordingly. */
+  position: fixed;
   pointer-events: none;
-  z-index: 5;
+  z-index: 60;
   padding: 6px 9px;
   font-size: 11px;
   line-height: 1.4;
