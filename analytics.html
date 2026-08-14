@@ -15,6 +15,7 @@
       </div>
       <div class="topbar-right">
         <a href="drivers.html" class="btn btn-quiet">Drivers</a>
+        <a href="misuse.html" class="btn btn-quiet">Misuse review</a>
         <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
           Theme
         </button>
@@ -61,7 +62,6 @@
         </header>
         <div class="chart-wrap chart-wrap-sm">
           <svg id="chart-distance-day" class="chart-svg" data-tip="tip-distance-day" role="img" aria-label="Fleet distance per day"></svg>
-          <div id="tip-distance-day" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -79,7 +79,6 @@
         </header>
         <div class="chart-wrap chart-wrap-sm">
           <svg id="chart-utilisation-day" class="chart-svg" data-tip="tip-utilisation-day" role="img" aria-label="Fleet utilisation per day"></svg>
-          <div id="tip-utilisation-day" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -97,7 +96,6 @@
         </header>
         <div class="chart-wrap chart-wrap-sm">
           <svg id="chart-revenue-day" class="chart-svg" data-tip="tip-revenue-day" role="img" aria-label="Fleet revenue per day"></svg>
-          <div id="tip-revenue-day" class="tip" hidden></div>
         </div>
       </article>
     </section>
@@ -119,7 +117,6 @@
         </header>
         <div class="chart-wrap">
           <svg id="chart-lb-opportunity" class="chart-svg" data-tip="tip-lb-opportunity" role="img" aria-label="Vehicles ranked by idle plus maintenance time"></svg>
-          <div id="tip-lb-opportunity" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -137,7 +134,6 @@
         </header>
         <div class="chart-wrap">
           <svg id="chart-lb-maintenance-now" class="chart-svg" data-tip="tip-lb-maintenance-now" role="img" aria-label="Vehicles currently in maintenance, by duration so far"></svg>
-          <div id="tip-lb-maintenance-now" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -155,7 +151,6 @@
         </header>
         <div class="chart-wrap">
           <svg id="chart-lb-utilisation" class="chart-svg" data-tip="tip-lb-utilisation" role="img" aria-label="Vehicles ranked by utilisation, lowest first"></svg>
-          <div id="tip-lb-utilisation" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -173,7 +168,6 @@
         </header>
         <div class="chart-wrap">
           <svg id="chart-lb-departure" class="chart-svg" data-tip="tip-lb-departure" role="img" aria-label="Vehicles ranked by average morning departure time, latest first"></svg>
-          <div id="tip-lb-departure" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -191,7 +185,6 @@
         </header>
         <div class="chart-wrap">
           <svg id="chart-lb-overnight" class="chart-svg" data-tip="tip-lb-overnight" role="img" aria-label="Vehicles ranked by parked-overnight compliance, lowest first"></svg>
-          <div id="tip-lb-overnight" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -209,7 +202,6 @@
         </header>
         <div class="chart-wrap">
           <svg id="chart-lb-anomalies" class="chart-svg" data-tip="tip-lb-anomalies" role="img" aria-label="Vehicles ranked by GPS anomaly count"></svg>
-          <div id="tip-lb-anomalies" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -225,12 +217,11 @@
           </h2>
           <p class="card-sub">
             mapped vehicles only, moving time backed by a ride — worst first. See
-            <a href="drivers.html">Drivers</a> for the full misuse review.
+            <a href="misuse.html">Misuse review</a> for the full picture.
           </p>
         </header>
         <div class="chart-wrap">
           <svg id="chart-lb-ride-corroboration" class="chart-svg" data-tip="tip-lb-ride-corroboration" role="img" aria-label="Vehicles ranked by ride-corroborated percentage, lowest first"></svg>
-          <div id="tip-lb-ride-corroboration" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -248,7 +239,6 @@
         </header>
         <div class="chart-wrap">
           <svg id="chart-revenue-vehicle" class="chart-svg" data-tip="tip-revenue-vehicle" role="img" aria-label="Vehicles ranked by total revenue"></svg>
-          <div id="tip-revenue-vehicle" class="tip" hidden></div>
         </div>
       </article>
       <article class="card card-chart">
@@ -266,7 +256,6 @@
         </header>
         <div class="chart-wrap">
           <svg id="chart-revenue-per-hour" class="chart-svg" data-tip="tip-revenue-per-hour" role="img" aria-label="Vehicles ranked by revenue per moving hour, lowest first"></svg>
-          <div id="tip-revenue-per-hour" class="tip" hidden></div>
         </div>
       </article>
     </section>
@@ -349,7 +338,6 @@
           <div class="kpis kpis-activity" id="deep-dive-kpis"></div>
           <div class="chart-wrap chart-wrap-sm">
             <svg id="chart-deep-dive" class="chart-svg" data-tip="tip-deep-dive" role="img" aria-label="Vehicle utilisation over time"></svg>
-            <div id="tip-deep-dive" class="tip" hidden></div>
           </div>
           <h4>Maintenance visits in range</h4>
           <div class="table-wrap">
@@ -488,6 +476,25 @@
       <span class="foot-sep">·</span>
       <span>Leaderboards and the day table auto-load; deep reports run on demand</span>
     </footer>
+
+    <!-- Chart tooltips, portaled to a direct body child - NOT nested inside any
+         .card, so an ancestor's opacity (.is-refreshing) can never trap them in a
+         stacking context that paints them behind the chart. Positioned via JS
+         (position: fixed, chart.js sets left/top from pointer coordinates); DOM
+         location is otherwise irrelevant since lookup is by id. -->
+    <div id="tip-distance-day" class="tip" hidden></div>
+    <div id="tip-utilisation-day" class="tip" hidden></div>
+    <div id="tip-revenue-day" class="tip" hidden></div>
+    <div id="tip-lb-opportunity" class="tip" hidden></div>
+    <div id="tip-lb-maintenance-now" class="tip" hidden></div>
+    <div id="tip-lb-utilisation" class="tip" hidden></div>
+    <div id="tip-lb-departure" class="tip" hidden></div>
+    <div id="tip-lb-overnight" class="tip" hidden></div>
+    <div id="tip-lb-anomalies" class="tip" hidden></div>
+    <div id="tip-lb-ride-corroboration" class="tip" hidden></div>
+    <div id="tip-revenue-vehicle" class="tip" hidden></div>
+    <div id="tip-revenue-per-hour" class="tip" hidden></div>
+    <div id="tip-deep-dive" class="tip" hidden></div>
 
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>

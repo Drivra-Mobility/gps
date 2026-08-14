@@ -491,6 +491,13 @@ input[type="date"] {
   width: 100%;
   background: var(--page);
 }
+#misuse-map {
+  height: 320px;
+  width: 100%;
+  background: var(--page);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
 .card-map.is-picking #map {
   cursor: crosshair;
 }

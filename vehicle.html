@@ -23,6 +23,7 @@
         <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
         <a href="analytics.html" class="btn btn-quiet">Analytics</a>
         <a href="drivers.html" class="btn btn-quiet">Drivers</a>
+        <a href="misuse.html" class="btn btn-quiet">Misuse review</a>
         <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
           Theme
         </button>
@@ -126,7 +127,6 @@
           </header>
           <div class="chart-wrap">
             <svg id="chart-speed" class="chart-svg" data-tip="tip-speed" role="img" aria-label="Speed over time"></svg>
-            <div id="tip-speed" class="tip" hidden></div>
           </div>
         </article>
       </section>
@@ -171,6 +171,13 @@
       <span class="foot-sep">·</span>
       <span>Auto-refreshes every 60s</span>
     </footer>
+
+    <!-- Chart tooltips, portaled to a direct body child - NOT nested inside any
+         .card, so an ancestor's opacity (.is-refreshing) can never trap them in a
+         stacking context that paints them behind the chart. Positioned via JS
+         (position: fixed, chart.js sets left/top from pointer coordinates); DOM
+         location is otherwise irrelevant since lookup is by id. -->
+    <div id="tip-speed" class="tip" hidden></div>
 
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"

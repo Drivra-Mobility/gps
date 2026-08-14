@@ -95,8 +95,8 @@ const CONFIG = {
   MAX_PLAUSIBLE_KMH: 120, // implied speed above this between two readings = "gps_jump"
   STUCK_MINUTES: 30, // this long reporting speed>0 with ~no position change = "frozen_while_moving"
 
-  // Vehicle <-> driver mapping + Yango ride-corroboration ("misuse
-  // detection", drivers.html). Cross-references GPS movement against
+  // Vehicle <-> driver mapping (drivers.html) + Yango ride-corroboration
+  // ("misuse detection", misuse.html). Cross-references GPS movement against
   // Yango ride records (synced by a separate app, yapigo, into this same
   // Supabase project's drivers/orders tables) via vehicle_ride_match_day_metrics/
   // vehicle_ride_segments (see schema.sql).
@@ -114,7 +114,7 @@ const CONFIG = {
   // misuse before their order has even landed.
   RIDE_MATCH_PENDING_GRACE_MINUTES: 20,
 
-  // Confidence-score heuristic (drivers.js's computeConfidenceScore()) -
+  // Confidence-score heuristic (misuse.js's computeConfidenceScores()) -
   // a transparent, hand-tunable set of thresholds in the same spirit as
   // MAX_PLAUSIBLE_KMH/STUCK_MINUTES above: guessed and documented, not
   // derived, meant to be retuned once real flagged-vs-confirmed cases
@@ -130,11 +130,12 @@ const CONFIG = {
   MISUSE_TIER_HIGH: 60,
   MISUSE_TIER_MEDIUM: 25,
 
-  // Evidence timeline (drivers.html detail panel): raw per-vehicle position
-  // history, fetched unaggregated to detect GPS-offline gaps client-side -
-  // unlike everything else on that page, this isn't a bounded Postgres
-  // aggregate, so it needs its own small window to stay well under
-  // PostgREST's row cap. 72h matches vehicle.html's own longest "history
-  // window" preset - the app's existing ceiling for a raw per-vehicle fetch.
+  // Evidence timeline + map (misuse.html detail panel): raw per-vehicle
+  // position history, fetched unaggregated to detect GPS-offline gaps
+  // client-side - unlike everything else on that page, this isn't a
+  // bounded Postgres aggregate, so it needs its own small window to stay
+  // well under PostgREST's row cap. 72h matches vehicle.html's own longest
+  // "history window" preset - the app's existing ceiling for a raw
+  // per-vehicle fetch.
   MISUSE_TIMELINE_HOURS: 72,
 };

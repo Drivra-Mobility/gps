@@ -115,8 +115,8 @@ const API = (() => {
   }
 
   // Vehicle <-> driver phone mapping - full history (current + past), not
-  // just today's assignment. drivers.js splits current (valid_to is null)
-  // from history client-side.
+  // just today's assignment. currentDriverByImei() below splits current
+  // (valid_to is null) from history client-side.
   async function fetchVehicleDriverMappings() {
     const { data, error } = await AUTH.client
       .from("vehicle_driver_mapping")

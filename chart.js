@@ -332,10 +332,15 @@ const CHART = (() => {
 
   // ---- Timeline (swimlane) chart -----------------------------------------
   // lanes: [{ label: string, segments: [{start: Date, end: Date, label:
-  // string, sub?: string, color: css-color}] }]. Within a lane, segments
-  // are drawn in the given order - later ones paint over earlier ones, so
-  // pass background bands (e.g. a "GPS offline" gap) before foreground ones
-  // that should sit on top of them. opts: { rangeStart: Date, rangeEnd: Date }.
+  // string, sub?: string, color: css-color, texture?: boolean}] }]. Within a
+  // lane, segments are drawn in the given order - later ones paint over
+  // earlier ones, so pass background bands (e.g. a "GPS offline" gap) before
+  // foreground ones that should sit on top of them. `texture: true` draws a
+  // diagonal-hatch fill instead of a solid one - reserved for "absence of
+  // data" (no reading at all), so it's never confusable at a glance with a
+  // solid-filled "we have a classified reading here" segment, even when
+  // both happen to use a similarly muted color. opts: { rangeStart: Date,
+  // rangeEnd: Date }.
   function timelineChart(svg, lanes, opts) {
     const { rangeStart, rangeEnd } = opts;
     svg.innerHTML = "";
@@ -355,6 +360,20 @@ const CHART = (() => {
       svg.appendChild(t);
       return;
     }
+
+    const hatchId = `${svg.id || "timeline"}-hatch`;
+    const defs = el("defs");
+    const pattern = el("pattern", {
+      id: hatchId,
+      width: 6,
+      height: 6,
+      patternUnits: "userSpaceOnUse",
+      patternTransform: "rotate(45)",
+    });
+    pattern.appendChild(el("rect", { width: 6, height: 6, style: "fill:var(--surface-1)" }));
+    pattern.appendChild(el("line", { x1: 0, y1: 0, x2: 0, y2: 6, style: "stroke:var(--state-offline);stroke-width:2" }));
+    defs.appendChild(pattern);
+    svg.appendChild(defs);
 
     const rMin = rangeStart.getTime();
     const rMax = rangeEnd.getTime();
@@ -399,7 +418,12 @@ const CHART = (() => {
         const x1 = Math.max(margin.left, xScale(seg.start.getTime()));
         const x2 = Math.min(margin.left + innerW, xScale(seg.end.getTime()));
         const w = Math.max(2, x2 - x1);
-        const bar = el("rect", { x: x1, y, width: w, height: laneH, rx: 3, style: `fill:${seg.color}` });
+        const fill = seg.texture ? `url(#${hatchId})` : seg.color;
+        const bar = el("rect", { x: x1, y, width: w, height: laneH, rx: 3, style: `fill:${fill}` });
+        if (seg.texture) {
+          bar.setAttribute("stroke", "var(--state-offline)");
+          bar.setAttribute("stroke-width", "1");
+        }
         svg.appendChild(bar);
 
         const hit = el("rect", { x: x1, y, width: w, height: laneH, fill: "transparent" });

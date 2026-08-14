@@ -22,6 +22,7 @@
         <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
         <a href="analytics.html" class="btn btn-quiet">Analytics</a>
         <a href="drivers.html" class="btn btn-quiet">Drivers</a>
+        <a href="misuse.html" class="btn btn-quiet">Misuse review</a>
         <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
           Theme
         </button>
@@ -177,7 +178,6 @@
           </header>
           <div class="chart-wrap chart-wrap-sm">
             <svg id="chart-moving" class="chart-svg" data-tip="tip-moving" role="img" aria-label="Count of moving vehicles over time"></svg>
-            <div id="tip-moving" class="tip" hidden></div>
           </div>
         </article>
         <article class="card card-chart">
@@ -187,7 +187,6 @@
           </header>
           <div class="chart-wrap chart-wrap-sm">
             <svg id="chart-speed" class="chart-svg" data-tip="tip-speed" role="img" aria-label="Average speed of moving vehicles over time"></svg>
-            <div id="tip-speed" class="tip" hidden></div>
           </div>
         </article>
       </div>
@@ -200,7 +199,6 @@
       </header>
       <div class="chart-wrap">
         <svg id="chart-distance" class="chart-svg" data-tip="tip-distance" role="img" aria-label="Top vehicles by distance travelled"></svg>
-        <div id="tip-distance" class="tip" hidden></div>
       </div>
     </section>
 
@@ -242,6 +240,15 @@
       <span class="foot-sep">·</span>
       <span>Auto-refreshes every 60s</span>
     </footer>
+
+    <!-- Chart tooltips, portaled to a direct body child - NOT nested inside any
+         .card, so an ancestor's opacity (.is-refreshing) can never trap them in a
+         stacking context that paints them behind the chart. Positioned via JS
+         (position: fixed, chart.js sets left/top from pointer coordinates); DOM
+         location is otherwise irrelevant since lookup is by id. -->
+    <div id="tip-moving" class="tip" hidden></div>
+    <div id="tip-speed" class="tip" hidden></div>
+    <div id="tip-distance" class="tip" hidden></div>
 
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
