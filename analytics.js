@@ -182,7 +182,14 @@
     const REQUESTS = [
       ["latest", "vehicle roster", () => API.fetchLatest()],
       ["days", "daily metrics", () => API.fetchDailyMetrics({ startDate, endDate })],
-      ["ongoingRaw", "ongoing maintenance", () => API.fetchMaintenanceVisits({ startDate: null })],
+      [
+        "ongoingRaw",
+        "ongoing maintenance",
+        () =>
+          API.fetchMaintenanceVisits({
+            startDate: kathmanduDateShift(kathmanduToday(), -(CONFIG.MAINTENANCE_ONGOING_LOOKBACK_DAYS - 1)),
+          }),
+      ],
       ["recent", "recent maintenance", () => API.fetchMaintenanceVisits({ startDate })],
       ["anomaliesRaw", "GPS anomalies", () => API.fetchAnomalies({ startDate, endDate })],
       ["rideMatch", "ride-corroboration data", () => API.fetchRideMatchDailyMetrics({ startDate, endDate })],

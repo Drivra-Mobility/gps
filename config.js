@@ -75,6 +75,20 @@ const CONFIG = {
   // enough fleet.
   ANALYTICS_DEFAULT_RANGE_DAYS: 14,
 
+  // How far back to scan when checking which vehicles are CURRENTLY mid
+  // maintenance-visit (analytics.html's "ongoing visits" fetch, independent
+  // of the date-range control above). Bounded on purpose: p_since=null
+  // scans public.vehicle_positions with no lower bound at all, and that
+  // full-history scan is the kind of thing that gets slower as the table
+  // grows until it eventually hits Supabase's statement timeout - it did,
+  // in production (surfaced as an unhelpful 500 with no partial data,
+  // before analytics.js's Promise.allSettled fallback existed). A visit
+  // genuinely still ongoing after this many days is
+  // vanishingly rare; if it happens, is_ongoing still reads correctly true,
+  // only its visit_start/duration read from this window's edge instead of
+  // the true start - a truncated number beats a blank page.
+  MAINTENANCE_ONGOING_LOOKBACK_DAYS: 30,
+
   // Vehicle-type icon classification for the map (cosmetic only - purely
   // for choosing a marker glyph). There is no vehicle-type column in
   // vehicle_positions, so this matches vehicle_no/vehicle_name text against
