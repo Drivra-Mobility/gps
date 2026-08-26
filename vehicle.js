@@ -52,7 +52,7 @@
     const hours = Number(document.getElementById("window").value);
     const [history, mappings] = await Promise.all([
       API.fetchVehicleHistory(imei, hours),
-      API.fetchVehicleDriverMappings(),
+      API.fetchVehicleDriverMappings(imei),
     ]);
     rows = history;
     currentDriver = API.currentDriverByImei(mappings).get(imei) || null;
@@ -250,6 +250,7 @@
     if (loading) return;
     loading = true;
     document.body.classList.add("is-refreshing");
+    LOADING.start();
     const statusEl = document.getElementById("status");
     try {
       await loadAll();
@@ -262,6 +263,7 @@
       statusEl.classList.add("is-error");
     } finally {
       document.body.classList.remove("is-refreshing");
+      LOADING.stop();
       loading = false;
     }
   }
@@ -275,8 +277,9 @@
     document.getElementById("sign-out").hidden = false;
     document.getElementById("sign-out").addEventListener("click", () => AUTH.signOut());
     document.getElementById("window").addEventListener("change", refresh);
-    refresh();
-    setInterval(refresh, CONFIG.REFRESH_MS);
+    // Pauses while the tab is hidden instead of polling forever in the
+    // background - see loading.js's pollWhileVisible() for why.
+    LOADING.pollWhileVisible(refresh, CONFIG.REFRESH_MS);
     window.addEventListener("resize", () => {
       if (rows.length) renderChart();
     });

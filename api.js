@@ -117,12 +117,16 @@ const API = (() => {
   // Vehicle <-> driver phone mapping - full history (current + past), not
   // just today's assignment. currentDriverByImei() below splits current
   // (valid_to is null) from history client-side.
-  async function fetchVehicleDriverMappings() {
-    const { data, error } = await AUTH.client
-      .from("vehicle_driver_mapping")
-      .select("*")
-      .order("imei_no")
-      .order("valid_from", { ascending: false });
+  //
+  // imei is optional - pass it when the caller only ever wants ONE
+  // vehicle's mapping (vehicle.html's single-vehicle page) so it isn't
+  // pulling every vehicle's full mapping history just to read one row.
+  // Omit it for pages that genuinely need the whole fleet (index.html's
+  // table, misuse.html's ranked list, etc).
+  async function fetchVehicleDriverMappings(imei = null) {
+    let q = AUTH.client.from("vehicle_driver_mapping").select("*");
+    if (imei) q = q.eq("imei_no", imei);
+    const { data, error } = await q.order("imei_no").order("valid_from", { ascending: false });
     if (error) throw error;
     return data;
   }

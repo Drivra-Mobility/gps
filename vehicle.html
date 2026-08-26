@@ -21,9 +21,7 @@
       </div>
       <div class="topbar-right">
         <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
-        <a href="analytics.html" class="btn btn-quiet">Analytics</a>
-        <a href="drivers.html" class="btn btn-quiet">Drivers</a>
-        <a href="misuse.html" class="btn btn-quiet">Misuse review</a>
+        <span id="nav-links"></span>
         <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
           Theme
         </button>
@@ -169,7 +167,7 @@
     <footer class="foot">
       <span id="status">—</span>
       <span class="foot-sep">·</span>
-      <span>Auto-refreshes every 60s</span>
+      <span>Auto-refreshes every 90s (paused while this tab is hidden)</span>
     </footer>
 
     <!-- Chart tooltips, portaled to a direct body child - NOT nested inside any
@@ -191,6 +189,8 @@
     <script src="map.js"></script>
     <script src="auth.js"></script>
     <script src="api.js"></script>
+    <script src="loading.js"></script>
+    <script src="nav.js"></script>
     <script src="vehicle.js"></script>
   </body>
 </html>

@@ -445,6 +445,7 @@
     loading = true;
     const root = document.body;
     root.classList.add("is-refreshing");
+    LOADING.start();
     const statusEl = document.getElementById("status");
     try {
       await loadAll();
@@ -457,6 +458,7 @@
       statusEl.classList.add("is-error");
     } finally {
       root.classList.remove("is-refreshing");
+      LOADING.stop();
       loading = false;
     }
   }
@@ -467,8 +469,9 @@
     document.getElementById("window").addEventListener("change", refresh);
     document.getElementById("trails").addEventListener("change", renderMap);
     initTableSort();
-    refresh();
-    setInterval(refresh, CONFIG.REFRESH_MS);
+    // Pauses while the tab is hidden instead of polling forever in the
+    // background - see loading.js's pollWhileVisible() for why.
+    LOADING.pollWhileVisible(refresh, CONFIG.REFRESH_MS);
     window.addEventListener("resize", () => {
       if (latestRows.length) renderCharts();
     });

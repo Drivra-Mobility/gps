@@ -42,8 +42,15 @@ const CONFIG = {
   // A vehicle with no report in longer than this counts as "offline".
   STALE_MINUTES: 60,
 
-  // How often the dashboard re-polls Supabase for new rows.
-  REFRESH_MS: 60_000,
+  // How often the dashboard re-polls Supabase for new rows. Was 60s;
+  // bumped to 90s because the ETL lambda that actually populates
+  // vehicle_positions polls the whole fleet at most once/minute and is
+  // frequently rate-limited slower than that (see trackezz-supabase-etl's
+  // lambda_function.py) - polling this dashboard faster than the
+  // underlying data can change just burns reads for no fresher content.
+  // Also now pauses entirely while the tab is hidden - see loading.js's
+  // pollWhileVisible().
+  REFRESH_MS: 90_000,
 
   // Default length of history pulled for charts/trails/distance.
   DEFAULT_WINDOW_HOURS: 3,
