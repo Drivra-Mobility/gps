@@ -169,7 +169,8 @@ const MAP = (() => {
       ["Ignition", row.ignition || "—"],
       ["Last report", row.device_datetime ? new Date(row.device_datetime).toLocaleString() : "—"]
     );
-    if (row.location) rows.push(["Location", API.shortLocation(row.location)]);
+    const battery = Number((row.raw || {}).battery_percentage);
+    if (Number.isFinite(battery)) rows.push(["Battery", `${Math.round(battery)}%`]);
 
     for (const [k, v] of rows) {
       const line = document.createElement("div");

@@ -143,17 +143,6 @@ const API = (() => {
     return map;
   }
 
-  // Reverse-geocoded location strings from the device feed are a full
-  // administrative address ("Bhimsen Gola,Tilganga,Kathmandu09,Kathmandu
-  // Metropolitan City,Bagmati Province, Nepal (NE)") - far more precision
-  // than useful at a glance. Keeps just the first two comma-separated
-  // segments ("Bhimsen Gola,Tilganga"), which is usually the specific place
-  // name plus its immediate area.
-  function shortLocation(text) {
-    if (!text) return text;
-    return text.split(",").slice(0, 2).join(",");
-  }
-
   // Atomically closes any current mapping for imei and opens a new one (or,
   // if the phone is unchanged, updates driver_name/note in place) - see
   // schema.sql's set_vehicle_driver(). phone null/"" unassigns.
@@ -383,7 +372,6 @@ const API = (() => {
     fetchAnomalies,
     fetchVehicleDriverMappings,
     currentDriverByImei,
-    shortLocation,
     setVehicleDriver,
     lookupDriverByPhone,
     fetchRideMatchDailyMetrics,

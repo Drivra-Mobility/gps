@@ -218,11 +218,12 @@
       const hopTd = document.createElement("td");
       hopTd.className = "num";
       hopTd.textContent = hopM > 0 ? `${Math.round(hopM)} m` : "—";
-      const locTd = document.createElement("td");
-      locTd.className = "location";
-      locTd.textContent = r.location ? API.shortLocation(r.location) : "—";
+      const battTd = document.createElement("td");
+      battTd.className = "num";
+      const batt = Number((r.raw || {}).battery_percentage);
+      battTd.textContent = Number.isFinite(batt) ? `${Math.round(batt)}%` : "—";
 
-      tr.append(tTd, sTd, spTd, hopTd, locTd);
+      tr.append(tTd, sTd, spTd, hopTd, battTd);
       tbody.appendChild(tr);
     }
   }

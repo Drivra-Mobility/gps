@@ -348,7 +348,7 @@
         speed: row.speed || 0,
         distance: m.distanceKm,
         ageSec: API.ageSeconds(row.device_datetime),
-        location: row.location ? API.shortLocation(row.location) : "—",
+        battery: Number((row.raw || {}).battery_percentage),
       };
     });
   }
@@ -361,6 +361,10 @@
       if (key === "ageSec") {
         av = av == null ? Infinity : av;
         bv = bv == null ? Infinity : bv;
+      }
+      if (key === "battery") {
+        av = Number.isFinite(av) ? av : -Infinity;
+        bv = Number.isFinite(bv) ? bv : -Infinity;
       }
       if (typeof av === "string") return dir * av.localeCompare(bv);
       return dir * ((av ?? 0) - (bv ?? 0));
@@ -405,11 +409,16 @@
       ageTd.className = "num";
       ageTd.textContent = fmtAge(r.ageSec);
 
-      const locTd = document.createElement("td");
-      locTd.className = "location";
-      locTd.textContent = r.location;
+      const batteryTd = document.createElement("td");
+      batteryTd.className = "num";
+      if (Number.isFinite(r.battery)) {
+        batteryTd.textContent = `${Math.round(r.battery)}%`;
+        if (r.battery < 20) batteryTd.classList.add("is-error");
+      } else {
+        batteryTd.textContent = "—";
+      }
 
-      tr.append(vehTd, driverTd, stateTd, speedTd, distTd, ageTd, locTd);
+      tr.append(vehTd, driverTd, stateTd, speedTd, distTd, ageTd, batteryTd);
       tbody.appendChild(tr);
     }
   }

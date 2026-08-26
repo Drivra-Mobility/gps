@@ -8,6 +8,12 @@
  *
  * Aqua and yellow sit below 3:1 on the light surface, so every state ships a text
  * label and a distinct marker shape — colour never carries meaning alone.
+ *
+ * --brand is separate from the --state-* set on purpose (added 2026-08-26,
+ * matching drivra.com.np's own tokens: --color-accent #0a6846, "Archivo").
+ * It's Drivra's identity colour, used for primary actions/links/focus - never
+ * for a vehicle state, so it can't collide with or be mistaken for one of the
+ * four validated state hues above.
  */
 
 :root {
@@ -36,11 +42,15 @@
      against a state legend at the same time). */
   --series-revenue: #4a3aa7;
 
+  --brand: #0a6846;
+  --brand-600: #085537;
+  --brand-100: #e8f3ee;
+
   --critical: #d03b3b;
 
   --radius: 10px;
   --gap: 16px;
-  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -62,6 +72,12 @@
     --state-maintenance: #d95926;
     --state-offline: #898781;
     --series-revenue: #9085e9;
+
+    /* Lighter than the light-mode brand green for AA contrast on a dark
+       surface (mirrors how every --state-* above also lightens in dark). */
+    --brand: #2fb583;
+    --brand-600: #3fc794;
+    --brand-100: rgba(47, 181, 131, 0.14);
   }
 }
 
@@ -83,6 +99,10 @@
   --state-maintenance: #d95926;
   --state-offline: #898781;
   --series-revenue: #9085e9;
+
+  --brand: #2fb583;
+  --brand-600: #3fc794;
+  --brand-100: rgba(47, 181, 131, 0.14);
 }
 
 * {
@@ -140,7 +160,7 @@ h2 {
 }
 .loading-bar.is-active {
   opacity: 1;
-  background: linear-gradient(90deg, transparent, var(--state-moving), transparent);
+  background: linear-gradient(90deg, transparent, var(--brand), transparent);
   background-size: 200% 100%;
   animation: loading-bar-sweep 1.1s ease-in-out infinite;
 }
@@ -202,16 +222,16 @@ h2 {
   border-color: var(--baseline);
 }
 .btn[aria-pressed="true"] {
-  border-color: var(--state-moving);
-  color: var(--state-moving);
+  border-color: var(--brand);
+  color: var(--brand);
 }
 .btn-quiet {
   color: var(--text-muted);
 }
 .btn-primary {
   color: #ffffff;
-  background: var(--state-moving);
-  border-color: var(--state-moving);
+  background: var(--brand);
+  border-color: var(--brand);
   width: 100%;
   font-size: 13px;
   padding: 9px 12px;
@@ -877,7 +897,7 @@ tbody tr:hover {
   color: var(--text-secondary);
 }
 .leaflet-popup-content a {
-  color: var(--state-moving);
+  color: var(--brand);
 }
 .leaflet-container {
   background: var(--page);
@@ -1018,7 +1038,7 @@ tbody tr.is-clickable:hover {
 }
 tbody tr.is-selected {
   background: var(--page);
-  box-shadow: inset 3px 0 0 var(--state-moving);
+  box-shadow: inset 3px 0 0 var(--brand);
 }
 .table-nested {
   width: 100%;
