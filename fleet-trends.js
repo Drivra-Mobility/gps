@@ -1,9 +1,18 @@
-// Analytics page controller. No map, no live polling - this page loads once
-// on open (and whenever the filters change), because the underlying data
-// (daily/multi-day aggregates from the vehicle_day_metrics/
-// vehicle_maintenance_visits RPCs, see api.js and trackezz/supabase/schema.sql)
-// changes on the timescale of minutes-to-days, not seconds. Re-running those
-// queries every 60s the way the live pages do would just be wasted load.
+// Fleet trends page controller (formerly analytics.html/analytics.js - split
+// 2026-08 into fleet-trends/revenue/anomalies/maintenance so each page only
+// fires the queries it actually needs; see revenue.js/anomalies.js/
+// maintenance.js for the rest of what analytics.html used to show, and
+// misuse.html for ride-corroboration/ride-match, which analytics.html used
+// to duplicate as a "Lowest ride-corroborated %" ranking chart - dropped
+// here rather than relocated, since misuse.html's own table already shows
+// the same ride_corroborated_pct per vehicle and firing
+// vehicle_ride_match_day_metrics (by far the heaviest RPC this page used to
+// call) just to duplicate it wasn't worth it.
+//
+// No map, no live polling - this page loads once on open (and whenever the
+// filters change), because the underlying data (daily aggregates from the
+// vehicle_day_metrics RPC, see api.js and trackezz/supabase/schema.sql)
+// changes on the timescale of minutes-to-days, not seconds.
 (function () {
   "use strict";
 
@@ -11,15 +20,8 @@
 
   let latestRows = [];
   let dayMetrics = [];
-  let ongoingVisits = [];
-  let recentVisits = [];
-  let anomalies = [];
-  let rideMatchMetrics = [];
-  let revenueMetrics = [];
   let driverByImei = new Map(); // imei -> current vehicle_driver_mapping row
   let daySortState = { key: "local_date", dir: -1 };
-  let visitsSortState = { key: "duration_seconds", dir: -1 };
-  let anomaliesSortState = { key: "detected_at", dir: -1 };
   let loading = false;
 
   // ---- formatting -------------------------------------------------------
@@ -43,9 +45,6 @@
   }
   function fmtPct(p) {
     return `${Math.round(p)}%`;
-  }
-  function fmtNpr(v) {
-    return `Rs ${Math.round(v).toLocaleString("en-US")}`;
   }
   function fmtDateLabel(isoDate) {
     return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-US", {
@@ -168,61 +167,24 @@
     if ([...select.options].some((o) => o.value === prev)) select.value = prev;
   }
 
-  // This page fires 8 independent queries on every load. They used to be a
-  // single Promise.all(), which meant one slow/timed-out query (e.g. the
-  // ride-match RPC, by far the heaviest one here) blanked the entire page
-  // even though the other 7 succeeded. Promise.allSettled() + falling back
-  // to whatever was already loaded for anything that fails means a single
-  // flaky query degrades one chart, not the whole page - and returns the
-  // failures so refresh() can say exactly what didn't load instead of a
-  // generic "Load failed."
+  // 3 queries (vehicle roster, daily metrics, driver mappings), down from
+  // the 8 this page used to fire before the analytics.html split - see the
+  // file header.
   async function loadAll() {
     const startDate = document.getElementById("range-start").value;
     const endDate = document.getElementById("range-end").value;
-    const REQUESTS = [
-      ["latest", "vehicle roster", () => API.fetchLatest()],
-      ["days", "daily metrics", () => API.fetchDailyMetrics({ startDate, endDate })],
-      [
-        "ongoingRaw",
-        "ongoing maintenance",
-        () =>
-          API.fetchMaintenanceVisits({
-            startDate: kathmanduDateShift(kathmanduToday(), -(CONFIG.MAINTENANCE_ONGOING_LOOKBACK_DAYS - 1)),
-          }),
-      ],
-      ["recent", "recent maintenance", () => API.fetchMaintenanceVisits({ startDate })],
-      ["anomaliesRaw", "GPS anomalies", () => API.fetchAnomalies({ startDate, endDate })],
-      ["rideMatch", "ride-corroboration data", () => API.fetchRideMatchDailyMetrics({ startDate, endDate })],
-      ["revenue", "revenue data", () => API.fetchVehicleRevenueDailyMetrics({ startDate, endDate })],
-      ["mappings", "driver mappings", () => API.fetchVehicleDriverMappings()],
-    ];
-    const settled = await Promise.allSettled(REQUESTS.map(([, , fn]) => fn()));
-
-    const failed = [];
-    const byName = {};
-    settled.forEach((r, i) => {
-      const [name, label] = REQUESTS[i];
-      if (r.status === "fulfilled") byName[name] = r.value;
-      else failed.push(label);
-    });
-    if (failed.length === REQUESTS.length) {
-      // Everything failed - nothing to fall back to, surface the first
-      // real error rather than a vague "8 things failed."
-      throw settled[0].reason;
-    }
-
-    if ("latest" in byName) latestRows = byName.latest;
-    if ("days" in byName) dayMetrics = byName.days;
-    if ("ongoingRaw" in byName) ongoingVisits = byName.ongoingRaw.filter((v) => v.is_ongoing);
-    if ("recent" in byName) recentVisits = byName.recent;
-    if ("anomaliesRaw" in byName) anomalies = byName.anomaliesRaw;
-    if ("rideMatch" in byName) rideMatchMetrics = byName.rideMatch;
-    if ("revenue" in byName) revenueMetrics = byName.revenue;
-    if ("mappings" in byName) driverByImei = API.currentDriverByImei(byName.mappings);
+    const [latest, days, mappings] = await Promise.all([
+      API.fetchLatest(),
+      API.fetchDailyMetrics({ startDate, endDate }),
+      API.fetchVehicleDriverMappings(),
+    ]);
+    latestRows = latest;
+    dayMetrics = days;
+    driverByImei = API.currentDriverByImei(mappings);
+    document.getElementById("truncation-warning").hidden = dayMetrics.length < 1000;
 
     populateVehicleSelect(document.getElementById("vehicle-filter"), { includeAll: true });
     populateVehicleSelect(document.getElementById("deep-dive-vehicle"), { includeAll: false });
-    return failed;
   }
 
   // ---- ranking charts ---------------------------------------------------
@@ -250,19 +212,6 @@
     CHART.barChart(document.getElementById("chart-lb-opportunity"), opportunity, {
       valueLabel: fmtHm,
       color: "var(--state-idle)",
-      limit: null,
-    });
-
-    // Currently in maintenance longest.
-    const maintNow = ongoingVisits.map((v) => ({
-      label: v.vehicle_no || v.imei_no,
-      sub: driverName(v.imei_no),
-      value: v.duration_seconds,
-    }));
-    CHART.barChart(document.getElementById("chart-lb-maintenance-now"), maintNow, {
-      valueLabel: fmtHm,
-      tipUnit: "so far",
-      color: "var(--state-maintenance)",
       limit: null,
     });
 
@@ -309,90 +258,6 @@
       color: "var(--state-parked)",
       limit: null,
     });
-
-    // Most GPS anomalies.
-    const anomalyCounts = new Map(); // imei -> count
-    const anomalyLabels = new Map(); // imei -> label
-    for (const a of anomalies) {
-      anomalyCounts.set(a.imei_no, (anomalyCounts.get(a.imei_no) || 0) + 1);
-      if (!anomalyLabels.has(a.imei_no)) anomalyLabels.set(a.imei_no, a.vehicle_no || a.imei_no);
-    }
-    const anomalyBoard = [...anomalyCounts.entries()].map(([imei, count]) => ({
-      label: anomalyLabels.get(imei),
-      sub: driverName(imei),
-      value: count,
-    }));
-    CHART.barChart(document.getElementById("chart-lb-anomalies"), anomalyBoard, {
-      valueLabel: (v) => String(Math.round(v)),
-      tipUnit: "detections",
-      color: "var(--critical)",
-      limit: null,
-    });
-
-    // Lowest ride-corroborated % - mapped vehicles only (mapped_moving_seconds
-    // excludes unmapped time from the denominator, same convention as
-    // drivers.js's misuse review, so an incompletely-mapped fleet doesn't
-    // show falsely-low numbers for vehicles that just aren't mapped yet).
-    const rideByVehicle = new Map(); // imei -> { name, mapped, matched }
-    for (const r of rideMatchMetrics) {
-      if (!rideByVehicle.has(r.imei_no)) rideByVehicle.set(r.imei_no, { name: r.vehicle_no || r.imei_no, mapped: 0, matched: 0 });
-      const v = rideByVehicle.get(r.imei_no);
-      v.mapped += r.mapped_moving_seconds || 0;
-      v.matched += r.ride_matched_seconds || 0;
-    }
-    const rideBoard = [...rideByVehicle.entries()]
-      .filter(([, v]) => v.mapped > 0)
-      .map(([imei, v]) => ({ label: v.name, sub: driverName(imei), value: (100 * v.matched) / v.mapped }));
-    CHART.barChart(document.getElementById("chart-lb-ride-corroboration"), rideBoard, {
-      valueLabel: fmtPct,
-      ascending: true,
-      color: "var(--series-revenue)",
-      limit: null,
-    });
-
-    // Revenue per vehicle - keyed by vehicleLabel() (fetchLatest()-backed,
-    // covers every mapped vehicle regardless of whether it has GPS day-
-    // metrics rows in this exact range), not the byVehicle map above.
-    const revenueByImei = new Map();
-    for (const r of revenueMetrics) {
-      revenueByImei.set(r.imei_no, (revenueByImei.get(r.imei_no) || 0) + (r.gross_revenue || 0));
-    }
-    const revenueBoard = [...revenueByImei.entries()].map(([imei, revenue]) => ({
-      label: vehicleLabel(imei),
-      sub: driverName(imei),
-      value: revenue,
-    }));
-    CHART.barChart(document.getElementById("chart-revenue-vehicle"), revenueBoard, {
-      valueLabel: fmtNpr,
-      color: "var(--series-revenue)",
-      limit: null,
-    });
-
-    // Revenue per active hour - revenue divided by this vehicle's total
-    // moving seconds in range (from the day-metrics map above). Vehicles
-    // under 30 minutes of moving time are excluded (not enough to mean
-    // anything - see the card's tooltip).
-    const movingSecondsByImei = new Map();
-    for (const [imei, v] of byVehicle) {
-      movingSecondsByImei.set(imei, v.rows.reduce((s, r) => s + (r.moving_seconds || 0), 0));
-    }
-    const perHourBoard = [...revenueByImei.entries()]
-      .map(([imei, revenue]) => {
-        const movingSeconds = movingSecondsByImei.get(imei) || 0;
-        return {
-          label: vehicleLabel(imei),
-          sub: driverName(imei),
-          value: movingSeconds >= 1800 ? revenue / (movingSeconds / 3600) : null,
-        };
-      })
-      .filter((x) => x.value != null);
-    CHART.barChart(document.getElementById("chart-revenue-per-hour"), perHourBoard, {
-      valueLabel: fmtNpr,
-      tipUnit: "/ moving hour",
-      ascending: true,
-      color: "var(--series-revenue)",
-      limit: null,
-    });
   }
 
   // ---- fleet trend charts -----------------------------------------------
@@ -421,19 +286,6 @@
         return { x: new Date(`${d}T00:00:00Z`), y: b.tracked > 0 ? (100 * b.moving) / b.tracked : 0 };
       }),
       { valueLabel: (v) => `${Math.round(v)}%`, tipTitle: "Utilisation", xLabel: dateLabel, color: "var(--state-idle)" }
-    );
-
-    // Revenue by day, defaulting to 0 on days with rides for none of the
-    // fleet - dates come from dayMetrics (one row per vehicle per tracked
-    // day) so the trend line doesn't gap on genuinely zero-revenue days.
-    const revenueByDate = new Map();
-    for (const r of revenueMetrics) {
-      revenueByDate.set(r.local_date, (revenueByDate.get(r.local_date) || 0) + (r.gross_revenue || 0));
-    }
-    CHART.lineChart(
-      document.getElementById("chart-revenue-day"),
-      dates.map((d) => ({ x: new Date(`${d}T00:00:00Z`), y: revenueByDate.get(d) || 0 })),
-      { valueLabel: fmtNpr, tipTitle: "Revenue", xLabel: dateLabel, color: "var(--series-revenue)" }
     );
   }
 
@@ -495,77 +347,6 @@
     }
   }
 
-  // ---- maintenance visits table ---------------------------------------
-
-  function visitsTableValueOf(row, key) {
-    if (key === "visit_start" || key === "visit_end") return row[key] ? new Date(row[key]).getTime() : Infinity;
-    if (key === "vehicle_no") return row.vehicle_no || "";
-    return row[key] ?? 0;
-  }
-
-  function renderVisitsTable() {
-    const rows = sortRows(recentVisits, visitsSortState, visitsTableValueOf).slice(0, MAX_TABLE_ROWS);
-    const tbody = document.getElementById("visits-tbody");
-    tbody.innerHTML = "";
-    if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty">No maintenance visits in this range.</td></tr>';
-      return;
-    }
-    for (const v of rows) {
-      const tr = document.createElement("tr");
-      const cells = [
-        v.vehicle_no || v.imei_no,
-        fmtKathmanduDateTime(v.visit_start),
-        v.is_ongoing ? "Ongoing" : fmtKathmanduDateTime(v.visit_end),
-        fmtHm(v.duration_seconds),
-      ];
-      cells.forEach((text, i) => {
-        const td = document.createElement("td");
-        if (i === 3) td.className = "num";
-        td.textContent = text;
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    }
-  }
-
-  // ---- anomalies table ------------------------------------------------
-
-  function anomaliesTableValueOf(row, key) {
-    if (key === "detected_at") return row.detected_at ? new Date(row.detected_at).getTime() : 0;
-    if (key === "vehicle_no") return row.vehicle_no || "";
-    return row[key] ?? "";
-  }
-
-  const ANOMALY_KIND_LABEL = { gps_jump: "GPS jump", frozen_while_moving: "Frozen while moving" };
-
-  function renderAnomaliesTable() {
-    const rows = sortRows(anomalies, anomaliesSortState, anomaliesTableValueOf).slice(0, MAX_TABLE_ROWS);
-    const tbody = document.getElementById("anomalies-tbody");
-    tbody.innerHTML = "";
-    if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty">No anomalies detected in this range.</td></tr>';
-      return;
-    }
-    for (const a of rows) {
-      const tr = document.createElement("tr");
-      const vehTd = document.createElement("td");
-      vehTd.textContent = a.vehicle_no || a.imei_no;
-      const whenTd = document.createElement("td");
-      whenTd.textContent = fmtKathmanduDateTime(a.detected_at);
-      const kindTd = document.createElement("td");
-      const kindSpan = document.createElement("span");
-      kindSpan.className = "leaderboard-value is-alerting";
-      kindSpan.textContent = ANOMALY_KIND_LABEL[a.kind] || a.kind;
-      kindTd.appendChild(kindSpan);
-      const detailTd = document.createElement("td");
-      detailTd.className = "location";
-      detailTd.textContent = a.detail || "—";
-      tr.append(vehTd, whenTd, kindTd, detailTd);
-      tbody.appendChild(tr);
-    }
-  }
-
   function initTableSort(theadSelector, state, onSort) {
     document.querySelectorAll(theadSelector).forEach((th) => {
       th.addEventListener("click", () => {
@@ -589,6 +370,7 @@
     btn.disabled = true;
     const originalText = btn.textContent;
     btn.textContent = "Running report…";
+    LOADING.start();
     try {
       const startDate = document.getElementById("range-start").value;
       const endDate = document.getElementById("range-end").value;
@@ -656,6 +438,7 @@
     } finally {
       btn.disabled = false;
       btn.textContent = originalText;
+      LOADING.stop();
     }
   }
 
@@ -668,6 +451,7 @@
     btn.disabled = true;
     const originalText = btn.textContent;
     btn.textContent = "Running report…";
+    LOADING.start();
     try {
       const days = Number(document.getElementById("deep-dive-days").value);
       const endDate = kathmanduToday();
@@ -743,6 +527,7 @@
     } finally {
       btn.disabled = false;
       btn.textContent = originalText;
+      LOADING.stop();
     }
   }
 
@@ -752,31 +537,26 @@
     renderRankingCharts();
     renderCharts();
     renderDayTable();
-    renderVisitsTable();
-    renderAnomaliesTable();
   }
 
   async function refresh() {
     if (loading) return;
     loading = true;
     document.body.classList.add("is-refreshing");
+    LOADING.start();
     const statusEl = document.getElementById("status");
     try {
-      const failed = await loadAll();
+      await loadAll();
       renderAll();
-      if (failed.length) {
-        statusEl.textContent = `Loaded ${new Date().toLocaleTimeString()} - ${failed.join(", ")} timed out, showing last-known data for ${failed.length === 1 ? "it" : "those"}`;
-        statusEl.classList.add("is-error");
-      } else {
-        statusEl.textContent = `Loaded ${new Date().toLocaleTimeString()}`;
-        statusEl.classList.remove("is-error");
-      }
+      statusEl.textContent = `Loaded ${new Date().toLocaleTimeString()}`;
+      statusEl.classList.remove("is-error");
     } catch (err) {
       console.error(err);
       statusEl.textContent = `Load failed: ${err.message || err}`;
       statusEl.classList.add("is-error");
     } finally {
       document.body.classList.remove("is-refreshing");
+      LOADING.stop();
       loading = false;
     }
   }
@@ -801,8 +581,6 @@
     document.getElementById("run-deep-dive").addEventListener("click", runDeepDive);
 
     initTableSort("#day-table th[data-sort]", daySortState, renderDayTable);
-    initTableSort("#visits-table th[data-sort]", visitsSortState, renderVisitsTable);
-    initTableSort("#anomalies-table th[data-sort]", anomaliesSortState, renderAnomaliesTable);
 
     refresh();
     window.addEventListener("resize", () => {

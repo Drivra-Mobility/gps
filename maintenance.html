@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Maintenance — Fleet dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="breadcrumb"><a href="index.html">← Fleet dashboard</a></p>
+        <h1>Maintenance</h1>
+        <p class="sub">Discrete visit episodes — a repair spanning several days is one row, not several.</p>
+      </div>
+      <div class="topbar-right">
+        <span id="nav-links"></span>
+        <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+          Theme
+        </button>
+        <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+      </div>
+    </header>
+
+    <section class="controls" aria-label="Filters">
+      <div class="control">
+        <label for="range-start">From</label>
+        <input id="range-start" type="date" />
+      </div>
+      <div class="control">
+        <label for="range-end">To</label>
+        <input id="range-end" type="date" />
+      </div>
+    </section>
+
+    <section class="chart-grid" aria-label="Maintenance rankings">
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Longest in maintenance right now
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Vehicles currently mid-visit (haven't left the maintenance geofence yet), ranked by how long the current visit has run so far. Independent of the date range above — this is about right now, not the selected period."
+              aria-label="Vehicles currently mid-visit, ranked by how long the current visit has run so far. Independent of the date range above."
+            ></span>
+          </h2>
+          <p class="card-sub">ongoing maintenance visits, hours so far</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-lb-maintenance-now" class="chart-svg" data-tip="tip-lb-maintenance-now" role="img" aria-label="Vehicles currently in maintenance, by duration so far"></svg>
+        </div>
+      </article>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Recent maintenance visits</h2>
+        <p class="card-sub">Discrete visit episodes in the selected date range, sortable by column.</p>
+      </header>
+      <div class="table-wrap">
+        <table id="visits-table">
+          <caption class="visually-hidden">Recent maintenance visits, sortable by column</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-sort="vehicle_no">Vehicle</th>
+              <th scope="col" data-sort="visit_start">Start</th>
+              <th scope="col" data-sort="visit_end">End</th>
+              <th scope="col" data-sort="duration_seconds" class="num" aria-sort="descending">
+                Duration
+                <span class="info-tip info-tip-right" tabindex="0" data-tooltip="Wall-clock time from the first to the last reading inside the maintenance geofence for this visit. An ongoing visit (no End shown) uses the current time as the end, so this number keeps growing until the vehicle actually leaves." aria-label="Wall-clock time from first to last reading inside the maintenance geofence. Ongoing visits use the current time as the end and keep growing."></span>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="visits-tbody">
+            <tr>
+              <td colspan="4" class="empty">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span id="status">—</span>
+    </footer>
+
+    <div id="tip-lb-maintenance-now" class="tip" hidden></div>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="chart.js"></script>
+    <script src="auth.js"></script>
+    <script src="api.js"></script>
+    <script src="loading.js"></script>
+    <script src="nav.js"></script>
+    <script src="maintenance.js"></script>
+  </body>
+</html>

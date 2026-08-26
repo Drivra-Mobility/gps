@@ -74,23 +74,26 @@ const CONFIG = {
   // both use.
   MAX_GAP_MINUTES: 10,
 
-  // Default length of the date range analytics.html loads on open. Kept
-  // short deliberately: the day-metrics query returns one row per vehicle
-  // per day, and a wide "all vehicles" range risks exceeding PostgREST's
-  // default 1000-row response cap - the same ceiling that can already
-  // silently truncate the "Last 24 hours" history option above for a large
-  // enough fleet.
+  // Default length of the date range fleet-trends.html/revenue.html/
+  // anomalies.html/maintenance.html load on open (these all used to be one
+  // page, analytics.html, before the 2026-08 split - see fleet-trends.js's
+  // file header). Kept short deliberately: the day-metrics query returns
+  // one row per vehicle per day, and a wide "all vehicles" range risks
+  // exceeding PostgREST's default 1000-row response cap - the same
+  // ceiling that can already silently truncate the "Last 24 hours" history
+  // option above for a large enough fleet.
   ANALYTICS_DEFAULT_RANGE_DAYS: 14,
 
   // How far back to scan when checking which vehicles are CURRENTLY mid
-  // maintenance-visit (analytics.html's "ongoing visits" fetch, independent
-  // of the date-range control above). Bounded on purpose: p_since=null
-  // scans public.vehicle_positions with no lower bound at all, and that
-  // full-history scan is the kind of thing that gets slower as the table
-  // grows until it eventually hits Supabase's statement timeout - it did,
-  // in production (surfaced as an unhelpful 500 with no partial data,
-  // before analytics.js's Promise.allSettled fallback existed). A visit
-  // genuinely still ongoing after this many days is
+  // maintenance-visit (maintenance.html's "ongoing visits" fetch,
+  // independent of the date-range control above). Bounded on purpose:
+  // p_since=null scans public.vehicle_positions with no lower bound at
+  // all, and that full-history scan is the kind of thing that gets slower
+  // as the table grows until it eventually hits Supabase's statement
+  // timeout - it did, in production (surfaced as an unhelpful 500 with no
+  // partial data, before analytics.js's Promise.allSettled fallback
+  // existed - see loadAll()'s per-page error handling in each of the split
+  // pages now). A visit genuinely still ongoing after this many days is
   // vanishingly rare; if it happens, is_ongoing still reads correctly true,
   // only its visit_start/duration read from this window's edge instead of
   // the true start - a truncated number beats a blank page.
