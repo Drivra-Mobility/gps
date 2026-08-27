@@ -4,24 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Analytics — Fleet dashboard</title>
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <p class="breadcrumb"><a href="index.html">← Fleet dashboard</a></p>
-        <h1>Analytics</h1>
-        <p class="sub">Business insights across the fleet — where time is being spent, and where it's being wasted.</p>
-      </div>
-      <div class="topbar-right">
-        <a href="drivers.html" class="btn btn-quiet">Drivers</a>
-        <a href="misuse.html" class="btn btn-quiet">Misuse review</a>
-        <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
-          Theme
-        </button>
-        <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
-      </div>
-    </header>
+    <div class="page-shell">
+      <main class="page-main">
+    <div class="page-header">
+      <h1>Analytics</h1>
+      <p class="sub">Business insights across the fleet — where time is being spent, and where it's being wasted.</p>
+    </div>
 
     <section class="controls" aria-label="Filters">
       <div class="control">
@@ -476,6 +468,27 @@
       <span class="foot-sep">·</span>
       <span>Charts and the day table auto-load; deep reports run on demand</span>
     </footer>
+      </main>
+
+      <aside class="sidenav">
+        <a href="index.html" class="sidenav-brand">
+          <img src="assets/drivra-logo.png" alt="Drivra" />
+        </a>
+        <nav class="sidenav-nav" aria-label="Primary">
+          <a href="index.html" class="sidenav-link">Fleet</a>
+          <a href="analytics.html" class="sidenav-link is-active">Analytics</a>
+          <a href="drivers.html" class="sidenav-link">Drivers</a>
+          <a href="misuse.html" class="sidenav-link">Misuse review</a>
+        </nav>
+        <div class="sidenav-spacer"></div>
+        <div class="sidenav-utility">
+          <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+            Theme
+          </button>
+          <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+        </div>
+      </aside>
+    </div>
 
     <!-- Chart tooltips, portaled to a direct body child - NOT nested inside any
          .card, so an ancestor's opacity (.is-refreshing) can never trap them in a

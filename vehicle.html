@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Vehicle detail — Fleet dashboard</title>
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
     <link rel="stylesheet" href="styles.css" />
     <link
       rel="stylesheet"
@@ -13,23 +14,13 @@
     />
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <p class="breadcrumb"><a href="index.html">← Fleet dashboard</a></p>
-        <h1 id="veh-title">Vehicle</h1>
-        <p class="sub" id="veh-sub">—</p>
-      </div>
-      <div class="topbar-right">
-        <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
-        <a href="analytics.html" class="btn btn-quiet">Analytics</a>
-        <a href="drivers.html" class="btn btn-quiet">Drivers</a>
-        <a href="misuse.html" class="btn btn-quiet">Misuse review</a>
-        <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
-          Theme
-        </button>
-        <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
-      </div>
-    </header>
+    <div class="page-shell">
+      <main class="page-main">
+    <p class="breadcrumb"><a href="index.html">← Fleet dashboard</a></p>
+    <div class="page-header">
+      <h1 id="veh-title">Vehicle</h1>
+      <p class="sub" id="veh-sub">—</p>
+    </div>
 
     <section class="controls" aria-label="Filters">
       <div class="control">
@@ -171,6 +162,28 @@
       <span class="foot-sep">·</span>
       <span>Auto-refreshes every 60s</span>
     </footer>
+      </main>
+
+      <aside class="sidenav">
+        <a href="index.html" class="sidenav-brand">
+          <img src="assets/drivra-logo.png" alt="Drivra" />
+        </a>
+        <nav class="sidenav-nav" aria-label="Primary">
+          <a href="index.html" class="sidenav-link is-active">Fleet</a>
+          <a href="analytics.html" class="sidenav-link">Analytics</a>
+          <a href="drivers.html" class="sidenav-link">Drivers</a>
+          <a href="misuse.html" class="sidenav-link">Misuse review</a>
+        </nav>
+        <div class="sidenav-spacer"></div>
+        <div class="sidenav-utility">
+          <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
+          <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+            Theme
+          </button>
+          <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+        </div>
+      </aside>
+    </div>
 
     <!-- Chart tooltips, portaled to a direct body child - NOT nested inside any
          .card, so an ancestor's opacity (.is-refreshing) can never trap them in a

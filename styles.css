@@ -41,6 +41,12 @@
   --radius: 10px;
   --gap: 16px;
   --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  /* Drivra brand green (see Drivra-Mobility/drivra-mobility.github.io
+     css/style.css --color-accent) - used only for brand chrome (sidenav
+     link/logo), never for vehicle state - the --state-* palette above is
+     validated for CVD-safety and brand green isn't part of that gate. */
+  --brand-accent: #0a6846;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -62,6 +68,10 @@
     --state-maintenance: #d95926;
     --state-offline: #898781;
     --series-revenue: #9085e9;
+    /* Lighter tint for contrast on a dark sidenav background - the gradient
+       stop Drivra's own site uses next to --color-accent for the same
+       reason (see drivra-mobility.github.io css/style.css). */
+    --brand-accent: #2fb583;
   }
 }
 
@@ -83,6 +93,7 @@
   --state-maintenance: #d95926;
   --state-offline: #898781;
   --series-revenue: #9085e9;
+  --brand-accent: #2fb583;
 }
 
 * {
@@ -121,14 +132,22 @@ h2 {
   white-space: nowrap;
 }
 
-/* ---------- top bar ---------- */
+/* ---------- page shell + right-hand sidenav ---------- */
+/* Was a top bar; moved to the right once the link count (Fleet/Analytics/
+   Drivers/Misuse review) plus the utility controls made a single wrapping
+   row cramped. main comes first in DOM order (content before chrome, for
+   a11y/tab order), sidenav visually placed second/right via flex. */
 
-.topbar {
+.page-shell {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--gap);
-  flex-wrap: wrap;
+  gap: 28px;
+}
+.page-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.page-header {
   margin-bottom: var(--gap);
 }
 .sub {
@@ -136,11 +155,99 @@ h2 {
   color: var(--text-muted);
   font-size: 12px;
 }
-.topbar-right {
+
+.sidenav {
+  flex: 0 0 190px;
+  position: sticky;
+  top: 20px;
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 20px;
 }
+.sidenav-brand {
+  display: block;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  line-height: 0;
+}
+.sidenav-brand img {
+  height: 28px;
+  width: auto;
+  display: block;
+}
+.sidenav-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidenav-link {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-left: 3px solid transparent;
+}
+.sidenav-link:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+}
+.sidenav-link.is-active {
+  color: var(--brand-accent);
+  border-left-color: var(--brand-accent);
+  background: var(--surface-1);
+}
+.sidenav-spacer {
+  flex: 1;
+}
+.sidenav-utility {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sidenav-utility .btn {
+  width: 100%;
+}
+.sidenav-utility .freshness {
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .page-shell {
+    flex-direction: column-reverse;
+  }
+  .sidenav {
+    position: static;
+    flex: none;
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .sidenav-brand {
+    padding: 6px 10px;
+  }
+  .sidenav-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .sidenav-spacer {
+    display: none;
+  }
+  .sidenav-utility {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .sidenav-utility .btn {
+    width: auto;
+  }
+}
+
 .freshness {
   font-size: 12px;
   color: var(--text-secondary);
@@ -202,6 +309,15 @@ h2 {
   align-items: center;
   justify-content: center;
   background: var(--page);
+}
+/* Without this, the [hidden] attribute auth.js sets after a successful
+   sign-in loses to the class rule above (same specificity, class rule
+   comes later in the cascade) - the login card stays on screen over the
+   app forever. Only bites a fresh sign-in (the overlay is lazily created,
+   so a returning user with an already-valid session never triggers
+   showOverlay() at all - that's why this went unnoticed live). */
+.auth-overlay[hidden] {
+  display: none;
 }
 .auth-card {
   width: min(320px, 90vw);

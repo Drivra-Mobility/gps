@@ -62,8 +62,6 @@
     document.getElementById("veh-title").textContent = latest.vehicle_no || latest.vehicle_name || imei;
     const bits = [
       currentDriver ? `Driver: ${currentDriver.driver_name || currentDriver.driver_phone}` : "Unmapped - no driver on file",
-      latest.company,
-      latest.branch,
       latest.device_model,
       `IMEI ${latest.imei_no}`,
     ].filter(Boolean);
