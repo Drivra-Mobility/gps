@@ -173,13 +173,13 @@ h2 {
   }
 }
 
-/* ---------- page shell + right-hand sidenav ---------- */
-/* Was a top bar; moved to the right once nav.js's page list (Fleet/
-   Analytics/Revenue/Anomalies/Maintenance/Drivers/Misuse review) made a
-   single wrapping row cramped. main comes first in DOM order (content
-   before chrome, for a11y/tab order), sidenav visually placed second/right
-   via flex. nav.js still renders the actual <a> links into #nav-links -
-   this only changes where that container sits and how it's styled. */
+/* ---------- page shell + left-hand sidenav ---------- */
+/* Was a top bar, briefly a right sidenav, now left. main stays first in DOM
+   order regardless (content before chrome, for a11y/tab order) - `order:
+   -1` on .sidenav is what actually moves it, so switching sides again
+   later is a one-line change, not a markup change across all 9 pages.
+   nav.js still renders the actual <a> links into #nav-links - this only
+   changes where that container sits and how it's styled. */
 
 .page-shell {
   display: flex;
@@ -200,6 +200,7 @@ h2 {
 }
 
 .sidenav {
+  order: -1;
   flex: 0 0 190px;
   position: sticky;
   top: 20px;
@@ -261,7 +262,7 @@ h2 {
 
 @media (max-width: 760px) {
   .page-shell {
-    flex-direction: column-reverse;
+    flex-direction: column;
   }
   .sidenav {
     position: static;
