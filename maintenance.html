@@ -54,6 +54,34 @@
 
     <section class="card">
       <header class="card-head">
+        <h2>Visit frequency by vehicle</h2>
+        <p class="card-sub">
+          How many maintenance visits each vehicle had in the selected date range, and who was
+          driving at the time of each visit — not necessarily who drives it now.
+        </p>
+      </header>
+      <div class="table-wrap">
+        <table id="frequency-table">
+          <caption class="visually-hidden">Maintenance visit frequency by vehicle, sortable by column</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-sort="vehicle_no">Vehicle</th>
+              <th scope="col" data-sort="driver">Driver</th>
+              <th scope="col" data-sort="visits" class="num" aria-sort="descending">Visits</th>
+              <th scope="col" data-sort="totalSeconds" class="num">Total time in maintenance</th>
+            </tr>
+          </thead>
+          <tbody id="frequency-tbody">
+            <tr>
+              <td colspan="4" class="empty">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
         <h2>Recent maintenance visits</h2>
         <p class="card-sub">Discrete visit episodes in the selected date range, sortable by column.</p>
       </header>

@@ -219,13 +219,31 @@
               <th scope="col" data-sort="state">State</th>
               <th scope="col" data-sort="speed" class="num">Speed</th>
               <th scope="col" data-sort="distance" class="num">Distance</th>
+              <th scope="col" data-sort="distanceToday" class="num">
+                Distance today
+                <span
+                  class="info-tip"
+                  tabindex="0"
+                  data-tooltip="Distance while actually moving, this Kathmandu calendar day — not the same as 'Distance' to the left, which covers whatever history window is selected above and includes drift while parked/idle."
+                  aria-label="Distance while actually moving, this Kathmandu calendar day. Different from 'Distance', which covers the selected history window and includes drift while parked/idle."
+                ></span>
+              </th>
+              <th scope="col" data-sort="cashToday" class="num">
+                Cash today
+                <span
+                  class="info-tip"
+                  tabindex="0"
+                  data-tooltip="Gross Yango revenue today via this vehicle's mapped driver — total earnings, not filtered by payment method. Unmapped vehicles show '—'."
+                  aria-label="Gross Yango revenue today via this vehicle's mapped driver, total earnings. Unmapped vehicles show a dash."
+                ></span>
+              </th>
               <th scope="col" data-sort="ageSec" class="num">Last report</th>
               <th scope="col" data-sort="battery" class="num">Battery</th>
             </tr>
           </thead>
           <tbody id="tbody">
             <tr>
-              <td colspan="7" class="empty">Loading…</td>
+              <td colspan="9" class="empty">Loading…</td>
             </tr>
           </tbody>
         </table>

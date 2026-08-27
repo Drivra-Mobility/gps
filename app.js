@@ -8,6 +8,8 @@
   let driverByImei = new Map(); // imei -> current vehicle_driver_mapping row
   let grouped = new Map();
   let metrics = new Map(); // imei -> vehicleMetrics()
+  let distanceTodayByImei = new Map(); // imei -> distance_km, today (Kathmandu calendar day), moving-only
+  let revenueTodayByImei = new Map(); // imei -> gross_revenue, today
   let markers = new Map(); // imei -> Leaflet marker
   let prevStates = new Map(); // imei -> last-rendered classify() state, for the pulse-on-change effect
   let trailLayers = [];
@@ -33,6 +35,12 @@
     if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
     if (sec < 86400) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m ago`;
     return `${Math.floor(sec / 86400)}d ago`;
+  }
+  function kathmanduToday() {
+    return new Date().toLocaleDateString("sv-SE", { timeZone: CONFIG.TIMEZONE });
+  }
+  function fmtNpr(v) {
+    return `Rs ${Math.round(v).toLocaleString("en-US")}`;
   }
 
   // Tweens a KPI tile's displayed number from its previous value (stashed on
@@ -78,10 +86,15 @@
 
   async function loadAll() {
     const hours = Number(document.getElementById("window").value);
-    const [latest, history, mappings] = await Promise.all([
+    const today = kathmanduToday();
+    const [latest, history, mappings, dayMetricsToday, revenueToday] = await Promise.all([
       API.fetchLatest(),
       API.fetchHistorySince(hours),
       API.fetchVehicleDriverMappings(),
+      API.fetchDailyMetrics({ startDate: today, endDate: today }),
+      // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
+      // above, ~15min behind via fleet.*_cache) - always fully live.
+      API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }),
     ]);
     latestRows = latest;
     historyRows = history;
@@ -91,6 +104,8 @@
     for (const [imei, rows] of grouped.entries()) {
       metrics.set(imei, API.vehicleMetrics(rows));
     }
+    distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
+    revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
   }
 
   function rowState(row) {
@@ -347,6 +362,8 @@
         state,
         speed: row.speed || 0,
         distance: m.distanceKm,
+        distanceToday: distanceTodayByImei.get(row.imei_no) ?? null,
+        cashToday: revenueTodayByImei.get(row.imei_no) ?? null,
         ageSec: API.ageSeconds(row.device_datetime),
         battery: Number((row.raw || {}).battery_percentage),
       };
@@ -362,7 +379,7 @@
         av = av == null ? Infinity : av;
         bv = bv == null ? Infinity : bv;
       }
-      if (key === "battery") {
+      if (key === "battery" || key === "distanceToday" || key === "cashToday") {
         av = Number.isFinite(av) ? av : -Infinity;
         bv = Number.isFinite(bv) ? bv : -Infinity;
       }
@@ -376,7 +393,7 @@
     const rows = sortRows(tableRows());
     tbody.innerHTML = "";
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty">No vehicles reporting.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">No vehicles reporting.</td></tr>';
       return;
     }
     for (const r of rows) {
@@ -405,6 +422,14 @@
       distTd.className = "num";
       distTd.textContent = r.distance > 0 ? fmtKm(r.distance) : "—";
 
+      const distTodayTd = document.createElement("td");
+      distTodayTd.className = "num";
+      distTodayTd.textContent = r.distanceToday > 0 ? fmtKm(r.distanceToday) : "—";
+
+      const cashTodayTd = document.createElement("td");
+      cashTodayTd.className = "num";
+      cashTodayTd.textContent = Number.isFinite(r.cashToday) ? fmtNpr(r.cashToday) : "—";
+
       const ageTd = document.createElement("td");
       ageTd.className = "num";
       ageTd.textContent = fmtAge(r.ageSec);
@@ -418,7 +443,7 @@
         batteryTd.textContent = "—";
       }
 
-      tr.append(vehTd, driverTd, stateTd, speedTd, distTd, ageTd, batteryTd);
+      tr.append(vehTd, driverTd, stateTd, speedTd, distTd, distTodayTd, cashTodayTd, ageTd, batteryTd);
       tbody.appendChild(tr);
     }
   }

@@ -13,7 +13,9 @@
   let ongoingVisits = [];
   let recentVisits = [];
   let driverByImei = new Map();
+  let allMappings = []; // full history (current + past), for point-in-time driver lookups
   let visitsSortState = { key: "duration_seconds", dir: -1 };
+  let frequencySortState = { key: "visits", dir: -1 };
   let loading = false;
 
   function kathmanduToday() {
@@ -58,17 +60,59 @@
     return m ? m.driver_name || m.driver_phone : null;
   }
 
+  // Point-in-time driver lookup, deliberately NOT "current driver" - the
+  // frequency table below exists to spot rider-specific maintenance
+  // patterns, and attributing a vehicle's whole history to whoever drives
+  // it today would misattribute any visit from before a reassignment.
+  function driverAtTime(imei, atIso) {
+    const t = new Date(atIso).getTime();
+    const m = allMappings.find(
+      (m) =>
+        m.imei_no === imei &&
+        new Date(m.valid_from).getTime() <= t &&
+        (m.valid_to === null || t < new Date(m.valid_to).getTime())
+    );
+    return m ? m.driver_name || m.driver_phone : null;
+  }
+
+  function frequencyRows() {
+    const byImei = new Map();
+    for (const v of recentVisits) {
+      if (!byImei.has(v.imei_no)) {
+        byImei.set(v.imei_no, { vehicle_no: v.vehicle_no, visits: 0, totalSeconds: 0, drivers: new Set() });
+      }
+      const b = byImei.get(v.imei_no);
+      b.visits += 1;
+      b.totalSeconds += v.duration_seconds || 0;
+      const d = driverAtTime(v.imei_no, v.visit_start);
+      if (d) b.drivers.add(d);
+    }
+    return [...byImei.entries()].map(([imei, b]) => ({
+      imei,
+      vehicle_no: b.vehicle_no || imei,
+      // Most vehicles have one driver across the range; show it plainly. A
+      // vehicle that changed hands mid-range shows every distinct driver
+      // who had a visit, comma-joined - still correct, just not collapsed
+      // to a single (potentially wrong) name.
+      driver: b.drivers.size ? [...b.drivers].join(", ") : "—",
+      visits: b.visits,
+      totalSeconds: b.totalSeconds,
+    }));
+  }
+
   async function loadAll() {
     const startDate = document.getElementById("range-start").value;
+    const endDate = document.getElementById("range-end").value || null;
     const [ongoingRaw, recent, mappings] = await Promise.all([
       API.fetchMaintenanceVisits({
         startDate: kathmanduDateShift(kathmanduToday(), -(CONFIG.MAINTENANCE_ONGOING_LOOKBACK_DAYS - 1)),
       }),
-      API.fetchMaintenanceVisits({ startDate }),
+      API.fetchMaintenanceVisits({ startDate, endDate }),
       API.fetchVehicleDriverMappings(),
     ]);
     ongoingVisits = ongoingRaw.filter((v) => v.is_ongoing);
     recentVisits = recent;
+    allMappings = mappings;
     driverByImei = API.currentDriverByImei(mappings);
   }
 
@@ -128,6 +172,32 @@
     }
   }
 
+  function frequencyTableValueOf(row, key) {
+    if (key === "vehicle_no" || key === "driver") return row[key] || "";
+    return row[key] ?? 0;
+  }
+
+  function renderFrequencyTable() {
+    const rows = sortRows(frequencyRows(), frequencySortState, frequencyTableValueOf);
+    const tbody = document.getElementById("frequency-tbody");
+    tbody.innerHTML = "";
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">No maintenance visits in this range.</td></tr>';
+      return;
+    }
+    for (const r of rows) {
+      const tr = document.createElement("tr");
+      const cells = [r.vehicle_no, r.driver, String(r.visits), fmtHm(r.totalSeconds)];
+      cells.forEach((text, i) => {
+        const td = document.createElement("td");
+        if (i >= 2) td.className = "num";
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+  }
+
   function initTableSort() {
     document.querySelectorAll("#visits-table th[data-sort]").forEach((th) => {
       th.addEventListener("click", () => {
@@ -142,6 +212,19 @@
         renderTable();
       });
     });
+    document.querySelectorAll("#frequency-table th[data-sort]").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.sort;
+        if (frequencySortState.key === key) frequencySortState.dir *= -1;
+        else {
+          frequencySortState.key = key;
+          frequencySortState.dir = 1;
+        }
+        document.querySelectorAll("#frequency-table th[data-sort]").forEach((h) => h.removeAttribute("aria-sort"));
+        th.setAttribute("aria-sort", frequencySortState.dir === 1 ? "ascending" : "descending");
+        renderFrequencyTable();
+      });
+    });
   }
 
   async function refresh() {
@@ -153,6 +236,7 @@
     try {
       await loadAll();
       renderRankingChart();
+      renderFrequencyTable();
       renderTable();
       statusEl.textContent = `Loaded ${new Date().toLocaleTimeString()}`;
       statusEl.classList.remove("is-error");

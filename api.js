@@ -81,14 +81,17 @@ const API = (() => {
   // for a visit still in progress as of "now."
   //
   // startDate bounds how far back to scan (Kathmandu calendar date, or null
-  // for no lower bound).
-  async function fetchMaintenanceVisits({ imei = null, startDate = null } = {}) {
+  // for no lower bound). endDate bounds how far forward (inclusive; or null
+  // for no upper bound - a visit is included if it STARTED on or before
+  // endDate, even if still ongoing past it).
+  async function fetchMaintenanceVisits({ imei = null, startDate = null, endDate = null } = {}) {
     const { data, error } = await AUTH.client.rpc("vehicle_maintenance_visits", {
       p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
       p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
       p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
       p_imei: imei,
       p_since: startDate,
+      p_until: endDate,
       p_tz: CONFIG.TIMEZONE,
     });
     if (error) throw error;
