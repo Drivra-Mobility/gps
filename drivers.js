@@ -237,6 +237,7 @@
     triggerBtn.disabled = true;
     const original = triggerBtn.textContent;
     triggerBtn.textContent = "Saving…";
+    LOADING.start();
     try {
       await API.setVehicleDriver({
         imei,
@@ -252,6 +253,8 @@
       phoneError.hidden = false;
       triggerBtn.disabled = false;
       triggerBtn.textContent = original;
+    } finally {
+      LOADING.stop();
     }
   }
 
@@ -261,6 +264,7 @@
     if (loading) return;
     loading = true;
     document.body.classList.add("is-refreshing");
+    LOADING.start();
     const statusEl = document.getElementById("status");
     try {
       await loadMappings();
@@ -273,6 +277,7 @@
       statusEl.classList.add("is-error");
     } finally {
       document.body.classList.remove("is-refreshing");
+      LOADING.stop();
       loading = false;
     }
   }

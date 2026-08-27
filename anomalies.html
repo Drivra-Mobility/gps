@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anomalies — Fleet dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap"
+    />
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <main class="page-main">
+    <div class="page-header">
+      <h1>GPS anomalies</h1>
+      <p class="sub">
+        Internal consistency checks on the position stream — no external data needed. A "GPS
+        jump" is a physically implausible speed between two readings; "frozen while moving" is a
+        vehicle reporting speed but not actually changing position. Either can mean a bad GPS
+        fix, a spoofed feed, or a device fault — treat as a starting point for investigation, not
+        a verdict.
+      </p>
+    </div>
+
+    <section class="controls" aria-label="Filters">
+      <div class="control">
+        <label for="range-start">From</label>
+        <input id="range-start" type="date" />
+      </div>
+      <div class="control">
+        <label for="range-end">To</label>
+        <input id="range-end" type="date" />
+      </div>
+    </section>
+    <p class="hint is-error" id="truncation-warning" hidden>
+      This response came back at the row cap and may be truncated — narrow the date range for a
+      complete picture.
+    </p>
+
+    <section class="chart-grid" aria-label="Anomaly rankings">
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Most GPS anomalies
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Count of gps_jump + frozen_while_moving detections in range - see the table below for exactly what each kind means and the numbers behind each flag."
+              aria-label="Count of gps_jump and frozen_while_moving detections in range."
+            ></span>
+          </h2>
+          <p class="card-sub">implausible speed jumps or frozen-while-moving readings</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-lb-anomalies" class="chart-svg" data-tip="tip-lb-anomalies" role="img" aria-label="Vehicles ranked by GPS anomaly count"></svg>
+        </div>
+      </article>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>GPS anomalies</h2>
+        <p class="card-sub">Every detection in range, sortable by column.</p>
+      </header>
+      <div class="table-wrap table-wrap-scroll">
+        <table id="anomalies-table">
+          <caption class="visually-hidden">GPS anomalies, sortable by column</caption>
+          <thead>
+            <tr>
+              <th scope="col" data-sort="vehicle_no">Vehicle</th>
+              <th scope="col" data-sort="detected_at" aria-sort="descending">Detected</th>
+              <th scope="col" data-sort="kind">Kind</th>
+              <th scope="col">Detail</th>
+            </tr>
+          </thead>
+          <tbody id="anomalies-tbody">
+            <tr>
+              <td colspan="4" class="empty">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span id="status">—</span>
+    </footer>
+
+    <div id="tip-lb-anomalies" class="tip" hidden></div>
+
+      </main>
+
+      <aside class="sidenav">
+        <a href="index.html" class="sidenav-brand">
+          <img src="assets/drivra-logo.png" alt="Drivra" />
+        </a>
+        <nav class="sidenav-nav" id="nav-links" aria-label="Primary"></nav>
+        <div class="sidenav-spacer"></div>
+        <div class="sidenav-utility">
+          <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+            Theme
+          </button>
+          <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+        </div>
+      </aside>
+    </div>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="chart.js"></script>
+    <script src="auth.js"></script>
+    <script src="api.js"></script>
+    <script src="loading.js"></script>
+    <script src="nav.js"></script>
+    <script src="anomalies.js"></script>
+  </body>
+</html>

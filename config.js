@@ -42,8 +42,15 @@ const CONFIG = {
   // A vehicle with no report in longer than this counts as "offline".
   STALE_MINUTES: 60,
 
-  // How often the dashboard re-polls Supabase for new rows.
-  REFRESH_MS: 60_000,
+  // How often the dashboard re-polls Supabase for new rows. Was 60s;
+  // bumped to 90s because the ETL lambda that actually populates
+  // vehicle_positions polls the whole fleet at most once/minute and is
+  // frequently rate-limited slower than that (see trackezz-supabase-etl's
+  // lambda_function.py) - polling this dashboard faster than the
+  // underlying data can change just burns reads for no fresher content.
+  // Also now pauses entirely while the tab is hidden - see loading.js's
+  // pollWhileVisible().
+  REFRESH_MS: 90_000,
 
   // Default length of history pulled for charts/trails/distance.
   DEFAULT_WINDOW_HOURS: 3,
@@ -67,23 +74,26 @@ const CONFIG = {
   // both use.
   MAX_GAP_MINUTES: 10,
 
-  // Default length of the date range analytics.html loads on open. Kept
-  // short deliberately: the day-metrics query returns one row per vehicle
-  // per day, and a wide "all vehicles" range risks exceeding PostgREST's
-  // default 1000-row response cap - the same ceiling that can already
-  // silently truncate the "Last 24 hours" history option above for a large
-  // enough fleet.
+  // Default length of the date range fleet-trends.html/revenue.html/
+  // anomalies.html/maintenance.html load on open (these all used to be one
+  // page, analytics.html, before the 2026-08 split - see fleet-trends.js's
+  // file header). Kept short deliberately: the day-metrics query returns
+  // one row per vehicle per day, and a wide "all vehicles" range risks
+  // exceeding PostgREST's default 1000-row response cap - the same
+  // ceiling that can already silently truncate the "Last 24 hours" history
+  // option above for a large enough fleet.
   ANALYTICS_DEFAULT_RANGE_DAYS: 14,
 
   // How far back to scan when checking which vehicles are CURRENTLY mid
-  // maintenance-visit (analytics.html's "ongoing visits" fetch, independent
-  // of the date-range control above). Bounded on purpose: p_since=null
-  // scans public.vehicle_positions with no lower bound at all, and that
-  // full-history scan is the kind of thing that gets slower as the table
-  // grows until it eventually hits Supabase's statement timeout - it did,
-  // in production (surfaced as an unhelpful 500 with no partial data,
-  // before analytics.js's Promise.allSettled fallback existed). A visit
-  // genuinely still ongoing after this many days is
+  // maintenance-visit (maintenance.html's "ongoing visits" fetch,
+  // independent of the date-range control above). Bounded on purpose:
+  // p_since=null scans public.vehicle_positions with no lower bound at
+  // all, and that full-history scan is the kind of thing that gets slower
+  // as the table grows until it eventually hits Supabase's statement
+  // timeout - it did, in production (surfaced as an unhelpful 500 with no
+  // partial data, before analytics.js's Promise.allSettled fallback
+  // existed - see loadAll()'s per-page error handling in each of the split
+  // pages now). A visit genuinely still ongoing after this many days is
   // vanishingly rare; if it happens, is_ongoing still reads correctly true,
   // only its visit_start/duration read from this window's edge instead of
   // the true start - a truncated number beats a blank page.

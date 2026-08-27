@@ -484,6 +484,7 @@
     const rangeStart = new Date(rangeEnd.getTime() - hours * 3600000);
     document.getElementById("misuse-timeline-sub").textContent = `last ${Math.round(hours / 24)} days`;
 
+    LOADING.start();
     let segments = [];
     try {
       segments = await API.fetchVehicleRideSegments({ imei, startDate, endDate });
@@ -507,6 +508,8 @@
       history = await API.fetchVehicleHistory(imei, hours);
     } catch (err) {
       console.error(err);
+    } finally {
+      LOADING.stop();
     }
 
     currentHistory = history; // scrub lookups (handleScrub) read this
@@ -520,6 +523,7 @@
     if (loading) return;
     loading = true;
     document.body.classList.add("is-refreshing");
+    LOADING.start();
     const statusEl = document.getElementById("status");
     try {
       await Promise.all([loadMappings(), loadMisuse()]);
@@ -532,6 +536,7 @@
       statusEl.classList.add("is-error");
     } finally {
       document.body.classList.remove("is-refreshing");
+      LOADING.stop();
       loading = false;
     }
   }
@@ -543,8 +548,13 @@
       selectedMisuseImei = null;
       lastTimelineRender = null;
       document.getElementById("misuse-detail-panel").hidden = true;
-      await loadMisuse();
-      renderMisuseTable();
+      LOADING.start();
+      try {
+        await loadMisuse();
+        renderMisuseTable();
+      } finally {
+        LOADING.stop();
+      }
     });
     refresh();
     window.addEventListener("resize", () => {

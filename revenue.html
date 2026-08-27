@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Revenue — Fleet dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap"
+    />
+    <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <main class="page-main">
+    <div class="page-header">
+      <h1>Revenue</h1>
+      <p class="sub">Gross Yango revenue via each vehicle's mapped driver. Split out of Analytics so this loads without also pulling day-metrics/ride-match/anomalies data.</p>
+    </div>
+
+    <section class="controls" aria-label="Filters">
+      <div class="control">
+        <label for="range-start">From</label>
+        <input id="range-start" type="date" />
+      </div>
+      <div class="control">
+        <label for="range-end">To</label>
+        <input id="range-end" type="date" />
+      </div>
+    </section>
+    <p class="hint">
+      Mapped vehicles only — unmapped periods contribute nothing, so a vehicle with mapping gaps
+      will read as earning less than it actually did.
+    </p>
+
+    <section class="chart-grid" aria-label="Revenue trend">
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Revenue per day
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Fleet total gross Yango revenue, from mapped vehicles only, attributed to the local day each ride ended."
+              aria-label="Fleet total gross Yango revenue from mapped vehicles only, by the local day each ride ended."
+            ></span>
+          </h2>
+          <p class="card-sub">fleet total, mapped vehicles only, gross NPR</p>
+        </header>
+        <div class="chart-wrap chart-wrap-sm">
+          <svg id="chart-revenue-day" class="chart-svg" data-tip="tip-revenue-day" role="img" aria-label="Fleet revenue per day"></svg>
+        </div>
+      </article>
+    </section>
+
+    <h2 class="section-heading">Rankings</h2>
+    <section class="chart-grid" aria-label="Per-vehicle revenue rankings">
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Revenue per vehicle
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Total gross Yango revenue attributed to this vehicle across the date range, via whichever driver was mapped to it at the time each ride ended. Unmapped periods contribute nothing - this is a floor on true revenue, not a ceiling, for any vehicle with mapping gaps."
+              aria-label="Total gross Yango revenue attributed to this vehicle across the date range, via the mapped driver at the time. Unmapped periods contribute nothing."
+            ></span>
+          </h2>
+          <p class="card-sub">total gross NPR this period — top earners first</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-revenue-vehicle" class="chart-svg" data-tip="tip-revenue-vehicle" role="img" aria-label="Vehicles ranked by total revenue"></svg>
+        </div>
+      </article>
+      <article class="card card-chart">
+        <header class="card-head">
+          <h2>
+            Revenue per active hour
+            <span
+              class="info-tip"
+              tabindex="0"
+              data-tooltip="Total revenue ÷ total moving hours (this vehicle's Runtime, from Analytics' day table) — a productivity/efficiency lens rather than a raw total: a vehicle that's out less but earns more per hour on the road is doing better than one racking up hours for the same money. Excludes vehicles with under 30 minutes of moving time in range (not enough to mean anything)."
+              aria-label="Total revenue divided by total moving hours - efficiency, not just total earnings. Vehicles with under 30 minutes of moving time excluded."
+            ></span>
+          </h2>
+          <p class="card-sub">gross NPR ÷ moving hour — lowest first</p>
+        </header>
+        <div class="chart-wrap">
+          <svg id="chart-revenue-per-hour" class="chart-svg" data-tip="tip-revenue-per-hour" role="img" aria-label="Vehicles ranked by revenue per moving hour, lowest first"></svg>
+        </div>
+      </article>
+    </section>
+
+    <footer class="foot">
+      <span id="status">—</span>
+    </footer>
+
+    <!-- Chart tooltips, portaled to a direct body child - NOT nested inside any
+         .card, so an ancestor's opacity (.is-refreshing) can never trap them in a
+         stacking context that paints them behind the chart. -->
+    <div id="tip-revenue-day" class="tip" hidden></div>
+    <div id="tip-revenue-vehicle" class="tip" hidden></div>
+    <div id="tip-revenue-per-hour" class="tip" hidden></div>
+
+      </main>
+
+      <aside class="sidenav">
+        <a href="index.html" class="sidenav-brand">
+          <img src="assets/drivra-logo.png" alt="Drivra" />
+        </a>
+        <nav class="sidenav-nav" id="nav-links" aria-label="Primary"></nav>
+        <div class="sidenav-spacer"></div>
+        <div class="sidenav-utility">
+          <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+            Theme
+          </button>
+          <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+        </div>
+      </aside>
+    </div>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <script src="chart.js"></script>
+    <script src="auth.js"></script>
+    <script src="api.js"></script>
+    <script src="loading.js"></script>
+    <script src="nav.js"></script>
+    <script src="revenue.js"></script>
+  </body>
+</html>

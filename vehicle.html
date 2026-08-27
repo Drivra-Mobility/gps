@@ -4,6 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Vehicle detail — Fleet dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap"
+    />
     <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
     <link rel="stylesheet" href="styles.css" />
     <link
@@ -144,7 +150,7 @@
                 <th scope="col">Status</th>
                 <th scope="col" class="num">Speed</th>
                 <th scope="col" class="num">Hop distance</th>
-                <th scope="col">Location</th>
+                <th scope="col" class="num">Battery</th>
               </tr>
             </thead>
             <tbody id="tbody">
@@ -160,30 +166,8 @@
     <footer class="foot">
       <span id="status">—</span>
       <span class="foot-sep">·</span>
-      <span>Auto-refreshes every 60s</span>
+      <span>Auto-refreshes every 90s (paused while this tab is hidden)</span>
     </footer>
-      </main>
-
-      <aside class="sidenav">
-        <a href="index.html" class="sidenav-brand">
-          <img src="assets/drivra-logo.png" alt="Drivra" />
-        </a>
-        <nav class="sidenav-nav" aria-label="Primary">
-          <a href="index.html" class="sidenav-link is-active">Fleet</a>
-          <a href="analytics.html" class="sidenav-link">Analytics</a>
-          <a href="drivers.html" class="sidenav-link">Drivers</a>
-          <a href="misuse.html" class="sidenav-link">Misuse review</a>
-        </nav>
-        <div class="sidenav-spacer"></div>
-        <div class="sidenav-utility">
-          <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
-          <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
-            Theme
-          </button>
-          <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
-        </div>
-      </aside>
-    </div>
 
     <!-- Chart tooltips, portaled to a direct body child - NOT nested inside any
          .card, so an ancestor's opacity (.is-refreshing) can never trap them in a
@@ -197,6 +181,24 @@
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
       crossorigin=""
     ></script>
+      </main>
+
+      <aside class="sidenav">
+        <a href="index.html" class="sidenav-brand">
+          <img src="assets/drivra-logo.png" alt="Drivra" />
+        </a>
+        <nav class="sidenav-nav" id="nav-links" aria-label="Primary"></nav>
+        <div class="sidenav-spacer"></div>
+        <div class="sidenav-utility">
+          <span id="freshness" class="freshness" title="Age of the newest device reading">—</span>
+          <button id="theme-toggle" class="btn" type="button" aria-label="Toggle colour theme">
+            Theme
+          </button>
+          <button id="sign-out" class="btn btn-quiet" type="button" hidden>Sign out</button>
+        </div>
+      </aside>
+    </div>
+
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
     <script src="geo.js"></script>
@@ -204,6 +206,8 @@
     <script src="map.js"></script>
     <script src="auth.js"></script>
     <script src="api.js"></script>
+    <script src="loading.js"></script>
+    <script src="nav.js"></script>
     <script src="vehicle.js"></script>
   </body>
 </html>

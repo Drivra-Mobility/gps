@@ -117,12 +117,16 @@ const API = (() => {
   // Vehicle <-> driver phone mapping - full history (current + past), not
   // just today's assignment. currentDriverByImei() below splits current
   // (valid_to is null) from history client-side.
-  async function fetchVehicleDriverMappings() {
-    const { data, error } = await AUTH.client
-      .from("vehicle_driver_mapping")
-      .select("*")
-      .order("imei_no")
-      .order("valid_from", { ascending: false });
+  //
+  // imei is optional - pass it when the caller only ever wants ONE
+  // vehicle's mapping (vehicle.html's single-vehicle page) so it isn't
+  // pulling every vehicle's full mapping history just to read one row.
+  // Omit it for pages that genuinely need the whole fleet (index.html's
+  // table, misuse.html's ranked list, etc).
+  async function fetchVehicleDriverMappings(imei = null) {
+    let q = AUTH.client.from("vehicle_driver_mapping").select("*");
+    if (imei) q = q.eq("imei_no", imei);
+    const { data, error } = await q.order("imei_no").order("valid_from", { ascending: false });
     if (error) throw error;
     return data;
   }
@@ -137,17 +141,6 @@ const API = (() => {
       if (m.valid_to === null) map.set(m.imei_no, m);
     }
     return map;
-  }
-
-  // Reverse-geocoded location strings from the device feed are a full
-  // administrative address ("Bhimsen Gola,Tilganga,Kathmandu09,Kathmandu
-  // Metropolitan City,Bagmati Province, Nepal (NE)") - far more precision
-  // than useful at a glance. Keeps just the first two comma-separated
-  // segments ("Bhimsen Gola,Tilganga"), which is usually the specific place
-  // name plus its immediate area.
-  function shortLocation(text) {
-    if (!text) return text;
-    return text.split(",").slice(0, 2).join(",");
   }
 
   // Atomically closes any current mapping for imei and opens a new one (or,
@@ -379,7 +372,6 @@ const API = (() => {
     fetchAnomalies,
     fetchVehicleDriverMappings,
     currentDriverByImei,
-    shortLocation,
     setVehicleDriver,
     lookupDriverByPhone,
     fetchRideMatchDailyMetrics,
