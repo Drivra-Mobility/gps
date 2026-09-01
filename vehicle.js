@@ -9,6 +9,9 @@
 
   let rows = [];
   let currentDriver = null; // this vehicle's current vehicle_driver_mapping row, if any
+  let currentWindowHours = null;
+  let lastHistoryMaxPolledAt = null;
+  let lastSlowRefreshAt = 0; // driver mapping refreshes on CONFIG.SLOW_REFRESH_MS, not every poll - see app.js
   let map;
   let marker;
   let trailLine;
@@ -48,14 +51,29 @@
     });
   }
 
+  // See app.js's loadAll() for the full egress-reduction rationale
+  // (2026-08-27) - same pattern here: delta-fetch history instead of
+  // re-pulling the whole window every poll, and only re-check the driver
+  // mapping every CONFIG.SLOW_REFRESH_MS.
   async function loadAll() {
     const hours = Number(document.getElementById("window").value);
-    const [history, mappings] = await Promise.all([
-      API.fetchVehicleHistory(imei, hours),
-      API.fetchVehicleDriverMappings(imei),
+    const isFreshWindow = hours !== currentWindowHours || rows.length === 0;
+    const needsSlowRefresh = isFreshWindow || Date.now() - lastSlowRefreshAt >= CONFIG.SLOW_REFRESH_MS;
+
+    const [historyDelta, mappings] = await Promise.all([
+      isFreshWindow ? API.fetchVehicleHistory(imei, hours) : API.fetchVehicleHistoryDelta(imei, lastHistoryMaxPolledAt),
+      needsSlowRefresh ? API.fetchVehicleDriverMappings(imei) : Promise.resolve(null),
     ]);
-    rows = history;
-    currentDriver = API.currentDriverByImei(mappings).get(imei) || null;
+
+    rows = isFreshWindow ? historyDelta : API.mergeHistoryRows(rows, historyDelta, hours);
+    const newMax = API.maxPolledAt(historyDelta);
+    if (newMax) lastHistoryMaxPolledAt = newMax;
+    currentWindowHours = hours;
+
+    if (needsSlowRefresh) {
+      currentDriver = API.currentDriverByImei(mappings).get(imei) || null;
+      lastSlowRefreshAt = Date.now();
+    }
   }
 
   function renderHeader(latest) {

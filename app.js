@@ -10,6 +10,9 @@
   let metrics = new Map(); // imei -> vehicleMetrics()
   let distanceTodayByImei = new Map(); // imei -> distance_km, today (Kathmandu calendar day), moving-only
   let revenueTodayByImei = new Map(); // imei -> gross_revenue, today
+  let currentWindowHours = null; // last window loadAll() actually fetched a full history for
+  let lastHistoryMaxPolledAt = null; // cursor for fetchHistoryDelta() - newest polled_at already in historyRows
+  let lastSlowRefreshAt = 0; // driver mappings + today's metrics refresh on CONFIG.SLOW_REFRESH_MS, not every poll
   let markers = new Map(); // imei -> Leaflet marker
   let prevStates = new Map(); // imei -> last-rendered classify() state, for the pulse-on-change effect
   let trailLayers = [];
@@ -84,28 +87,52 @@
 
   // ---- data loading -----------------------------------------------------
 
+  // Added 2026-08-27 (egress reduction - see CONFIG.SLOW_REFRESH_MS and
+  // api.js's fetchHistoryDelta()/mergeHistoryRows() for the full story):
+  // this used to re-fetch the ENTIRE selected window's fleet history plus
+  // driver mappings plus today's metrics on every single poll, which was
+  // most of a free-tier Supabase project's monthly egress quota by itself.
+  // Now: history is a delta fetch merged into what's already in hand
+  // (full re-fetch only on first load or when the window dropdown
+  // changes, since a delta can't retroactively add older rows a wider
+  // window would include), and driver mappings/today's metrics only
+  // refresh every CONFIG.SLOW_REFRESH_MS, not every CONFIG.REFRESH_MS tick.
   async function loadAll() {
     const hours = Number(document.getElementById("window").value);
+    const isFreshWindow = hours !== currentWindowHours || historyRows.length === 0;
+    const needsSlowRefresh = isFreshWindow || Date.now() - lastSlowRefreshAt >= CONFIG.SLOW_REFRESH_MS;
     const today = kathmanduToday();
-    const [latest, history, mappings, dayMetricsToday, revenueToday] = await Promise.all([
+
+    const [latest, historyDelta, mappings, dayMetricsToday, revenueToday] = await Promise.all([
       API.fetchLatest(),
-      API.fetchHistorySince(hours),
-      API.fetchVehicleDriverMappings(),
-      API.fetchDailyMetrics({ startDate: today, endDate: today }),
+      isFreshWindow ? API.fetchHistorySince(hours) : API.fetchHistoryDelta(lastHistoryMaxPolledAt),
+      needsSlowRefresh ? API.fetchVehicleDriverMappings() : Promise.resolve(null),
+      needsSlowRefresh ? API.fetchDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
       // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
       // above, ~15min behind via fleet.*_cache) - always fully live.
-      API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }),
+      needsSlowRefresh ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
     ]);
+
     latestRows = latest;
-    historyRows = history;
-    driverByImei = API.currentDriverByImei(mappings);
-    grouped = API.groupByVehicle(history);
+    historyRows = isFreshWindow
+      ? historyDelta
+      : API.mergeHistoryRows(historyRows, historyDelta, hours);
+    const newMax = API.maxPolledAt(historyDelta);
+    if (newMax) lastHistoryMaxPolledAt = newMax;
+    currentWindowHours = hours;
+
+    grouped = API.groupByVehicle(historyRows);
     metrics = new Map();
     for (const [imei, rows] of grouped.entries()) {
       metrics.set(imei, API.vehicleMetrics(rows));
     }
-    distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
-    revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
+
+    if (needsSlowRefresh) {
+      driverByImei = API.currentDriverByImei(mappings);
+      distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
+      revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
+      lastSlowRefreshAt = Date.now();
+    }
   }
 
   function rowState(row) {

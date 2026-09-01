@@ -42,15 +42,26 @@ const CONFIG = {
   // A vehicle with no report in longer than this counts as "offline".
   STALE_MINUTES: 60,
 
-  // How often the dashboard re-polls Supabase for new rows. Was 60s;
-  // bumped to 90s because the ETL lambda that actually populates
-  // vehicle_positions polls the whole fleet at most once/minute and is
-  // frequently rate-limited slower than that (see trackezz-supabase-etl's
-  // lambda_function.py) - polling this dashboard faster than the
-  // underlying data can change just burns reads for no fresher content.
-  // Also now pauses entirely while the tab is hidden - see loading.js's
-  // pollWhileVisible().
-  REFRESH_MS: 90_000,
+  // How often the dashboard re-polls Supabase for new rows. Was 60s, then
+  // 90s, now 120s (2026-08-27, egress reduction - see below) because the
+  // ETL lambda that actually populates vehicle_positions polls the whole
+  // fleet at most once/minute and is frequently rate-limited slower than
+  // that (see trackezz-supabase-etl's lambda_function.py) - polling this
+  // dashboard faster than the underlying data can change just burns reads
+  // for no fresher content. Also now pauses entirely while the tab is
+  // hidden - see loading.js's pollWhileVisible().
+  REFRESH_MS: 120_000,
+
+  // How often app.js/vehicle.js re-fetch driver mappings and "today"'s
+  // distance/revenue metrics on their recurring poll - much less often
+  // than REFRESH_MS, since none of those change on a 2-minute cadence the
+  // way live position does. Added 2026-08-27: the free-tier Supabase
+  // project exceeded its 5GB/month egress quota, traced mostly to
+  // index.html's continuous poll re-fetching full position history every
+  // tick (see fetchHistoryDelta() in api.js for that fix) plus these
+  // smaller-but-still-recurring queries running every single tick for no
+  // reason - see kb.md in trackezz_etl for the full incident writeup.
+  SLOW_REFRESH_MS: 5 * 60_000,
 
   // Default length of history pulled for charts/trails/distance.
   DEFAULT_WINDOW_HOURS: 3,

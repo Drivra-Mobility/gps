@@ -34,6 +34,64 @@ const API = (() => {
     return data;
   }
 
+  // Same shape as fetchHistorySince, but only rows strictly newer than
+  // sinceIso - for a page that's already polling on a timer and just wants
+  // what's new since its last poll, not the whole window again every time.
+  // Pair with mergeHistoryRows() below to fold the delta into what's
+  // already in hand. sinceIso null/undefined falls back to "everything"
+  // (equivalent to no lower bound) - callers should have a real value once
+  // they've fetched at least once.
+  async function fetchHistoryDelta(sinceIso) {
+    let q = AUTH.client
+      .from("vehicle_positions")
+      .select(
+        "imei_no, vehicle_no, latitude, longitude, speed, status, polled_at, device_datetime"
+      )
+      .order("imei_no")
+      .order("polled_at");
+    if (sinceIso) q = q.gt("polled_at", sinceIso);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  }
+
+  // Folds a delta fetch into an existing history array: de-dupes by
+  // (imei_no, polled_at) - cheap insurance against a boundary row being
+  // re-fetched rather than something to rely on - re-sorts to the same
+  // imei_no-then-polled_at order the server always returns (vehicleMetrics()
+  // below assumes its input is time-ordered per vehicle; skipping this step
+  // after a merge would silently corrupt every distance/speed number), and
+  // drops anything that's aged out of the window. windowHours=null skips
+  // trimming (caller doesn't want a window cutoff applied).
+  function mergeHistoryRows(existing, incoming, windowHours) {
+    const seen = new Map();
+    for (const r of existing) seen.set(`${r.imei_no}|${r.polled_at}`, r);
+    for (const r of incoming) seen.set(`${r.imei_no}|${r.polled_at}`, r);
+    let merged = [...seen.values()];
+    if (windowHours != null) {
+      const cutoff = windowStartIso(windowHours);
+      merged = merged.filter((r) => r.polled_at >= cutoff);
+    }
+    merged.sort((a, b) => {
+      if (a.imei_no !== b.imei_no) return a.imei_no < b.imei_no ? -1 : 1;
+      return a.polled_at < b.polled_at ? -1 : a.polled_at > b.polled_at ? 1 : 0;
+    });
+    return merged;
+  }
+
+  // Newest polled_at across a set of rows (already-fetched history, or a
+  // fresh delta) - the cursor fetchHistoryDelta's next call should pass as
+  // sinceIso. String comparison is safe: PostgREST always returns polled_at
+  // in the same ISO-8601 format, which sorts lexicographically same as
+  // chronologically.
+  function maxPolledAt(rows) {
+    let max = null;
+    for (const r of rows) {
+      if (r.polled_at && (!max || r.polled_at > max)) max = r.polled_at;
+    }
+    return max;
+  }
+
   // Single vehicle's full history (all columns) within the window, for the
   // detail page. Filtered at the database rather than pulling the fleet and
   // discarding 24/25 of it.
@@ -44,6 +102,16 @@ const API = (() => {
       .eq("imei_no", imei)
       .gte("polled_at", windowStartIso(hours))
       .order("polled_at");
+    if (error) throw error;
+    return data;
+  }
+
+  // Delta version of fetchVehicleHistory - see fetchHistoryDelta() above,
+  // same idea scoped to one vehicle. Pair with mergeHistoryRows().
+  async function fetchVehicleHistoryDelta(imei, sinceIso) {
+    let q = AUTH.client.from("vehicle_positions").select("*").eq("imei_no", imei).order("polled_at");
+    if (sinceIso) q = q.gt("polled_at", sinceIso);
+    const { data, error } = await q;
     if (error) throw error;
     return data;
   }
@@ -369,7 +437,11 @@ const API = (() => {
   return {
     fetchLatest,
     fetchHistorySince,
+    fetchHistoryDelta,
+    mergeHistoryRows,
+    maxPolledAt,
     fetchVehicleHistory,
+    fetchVehicleHistoryDelta,
     fetchDailyMetrics,
     fetchMaintenanceVisits,
     fetchAnomalies,
