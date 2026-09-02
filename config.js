@@ -42,6 +42,25 @@ const CONFIG = {
   // A vehicle with no report in longer than this counts as "offline".
   STALE_MINUTES: 60,
 
+  // A vehicle stopped outside both geofences for this long or more
+  // (measured continuously - any movement resets it, see
+  // stateDurationFromHistory()) promotes from "idle" to "inactive".
+  // Single global threshold, no per-vehicle or time-of-day variation, by
+  // design (2026-08-27 requirement).
+  INACTIVE_MINUTES: 60,
+
+  // Fixed lookback for duration/state-classification history, independent
+  // of the "History window" dropdown (DEFAULT_WINDOW_HOURS below) that
+  // governs distance/speed/trail display. Deliberately decoupled: if
+  // someone selects the 1h display window (the shortest option, same as
+  // INACTIVE_MINUTES), a vehicle idle 70 minutes would have only ~60
+  // minutes of that streak in the display-window row set, understating
+  // its duration right at the boundary that matters most for the
+  // Idle/Inactive threshold. Fetched and merged separately (see
+  // app.js/vehicle.js) so classification stays correct regardless of
+  // what's selected for display.
+  INACTIVE_LOOKBACK_HOURS: 1.5,
+
   // How often the dashboard re-polls Supabase for new rows. Was 60s, then
   // 90s, then 120s, now 5 minutes (2026-08-27, egress reduction - see
   // below) because the ETL lambda that actually populates

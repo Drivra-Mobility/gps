@@ -311,6 +311,16 @@ const API = (() => {
     return data;
   }
 
+  // classify()'s 4 non-offline branches, WITHOUT the "is this reading old
+  // relative to right now" check - see stateDurationFromHistory() below
+  // for why that check must not run on historical rows.
+  function classifyIgnoringStaleness(row) {
+    if (GEO.isWithinMaintenance(row.latitude, row.longitude)) return "maintenance";
+    if (GEO.isWithinParking(row.latitude, row.longitude)) return "parked";
+    if ((row.speed || 0) > 0) return "moving";
+    return "idle";
+  }
+
   // How long a vehicle has continuously been in its current classify()
   // state, estimated client-side from whatever history rows are already
   // loaded (no extra query) - walks backward from the latest reading while
@@ -319,20 +329,42 @@ const API = (() => {
   // is true if the streak runs all the way to the first loaded row (so the
   // real duration may be longer than what's reported - an "at least"
   // caveat, not a lower bound guarantee beyond the window).
+  //
+  // Deliberately does NOT call classify() on the historical rows it walks
+  // (except when currentState is itself "offline") - classify()'s offline
+  // check compares a row's device_datetime against Date.now(), which is
+  // right for judging whether the LATEST reading is fresh, but wrong for a
+  // historical row: a row from 65 minutes ago is not "newly offline" just
+  // because 65 minutes of wall-clock time have now passed since it was
+  // polled - it was a perfectly good reading when it arrived. Re-running
+  // that check here made every streak silently cap at ~STALE_MINUTES
+  // regardless of how much history was actually loaded (found while
+  // testing the Inactive threshold, which sits exactly at that boundary -
+  // a 70-minute idle streak measured as 60 minutes before this fix,
+  // gapped by the walk mistaking its own 61st-minute-old row for offline).
+  // Genuine reporting gaps are already caught by the dtMs/MAX_GAP_MINUTES
+  // check right below - that's the correct tool for "was there a gap",
+  // not classify()'s now-relative staleness branch.
   function stateDurationFromHistory(rows, currentState) {
     if (!rows.length) return { seconds: 0, sinceStart: false };
+    // classify() never returns "inactive" (only classifyState() does, by
+    // promoting a long-enough "idle" streak) - normalize so a caller can
+    // pass either "idle" or "inactive" and get the same underlying streak,
+    // instead of silently walking zero rows.
+    const target = currentState === "inactive" ? "idle" : currentState;
+    const classifyFor = target === "offline" ? classify : classifyIgnoringStaleness;
     let i = rows.length - 1;
     let seconds = 0;
     while (i > 0) {
       const prev = rows[i - 1];
       const cur = rows[i];
-      if (classify(cur) !== currentState) break;
+      if (classifyFor(cur) !== target) break;
       const dtMs = new Date(cur.polled_at).getTime() - new Date(prev.polled_at).getTime();
       if (dtMs <= 0 || dtMs >= CONFIG.MAX_GAP_MINUTES * 60_000) break;
       seconds += dtMs / 1000;
       i--;
     }
-    const sinceStart = i === 0 && classify(rows[0]) === currentState;
+    const sinceStart = i === 0 && classifyFor(rows[0]) === target;
     return { seconds, sinceStart };
   }
 
@@ -347,19 +379,38 @@ const API = (() => {
 
   // "moving" / "maintenance" / "parked" / "idle" / "offline" for one
   // latest-row. Offline takes priority over everything else - a stale
-  // reading tells you nothing about where the vehicle is now. Maintenance
-  // is checked before parked: the two geofences are ~3.4km apart in this
-  // fleet's config so a reading can never legitimately match both, but if
-  // that ever changes, "in for service" is the more decision-relevant
-  // state to surface than "at the yard."
+  // reading tells you nothing about where the vehicle is now. Geofence
+  // membership beats movement (2026-08-27 requirement, from the fleet
+  // operators): a vehicle driving around inside the yard or the
+  // maintenance area still counts as "In parking"/"In maintenance", not
+  // "Moving" - location is what those two states are about, not whether
+  // the wheels are turning. Maintenance is checked before parked: the two
+  // geofences are ~3.4km apart in this fleet's config so a reading can
+  // never legitimately match both, but if that ever changes, "in for
+  // service" is the more decision-relevant state to surface than "at the
+  // yard."
   function classify(row) {
     if (!row.device_datetime) return "offline";
     const ageMin = (Date.now() - new Date(row.device_datetime).getTime()) / 60000;
     if (ageMin > CONFIG.STALE_MINUTES) return "offline";
-    if ((row.speed || 0) > 0) return "moving";
     if (GEO.isWithinMaintenance(row.latitude, row.longitude)) return "maintenance";
     if (GEO.isWithinParking(row.latitude, row.longitude)) return "parked";
+    if ((row.speed || 0) > 0) return "moving";
     return "idle";
+  }
+
+  // classify(), promoted: "idle" becomes "inactive" once the vehicle has
+  // been continuously idle (per stateDurationFromHistory(), which already
+  // resets on any movement/state change) for CONFIG.INACTIVE_MINUTES or
+  // more. Needs history, unlike classify() itself - callers should pass
+  // the CONFIG.INACTIVE_LOOKBACK_HOURS duration-tracking row set, not
+  // whatever's loaded for the display window (see app.js/vehicle.js for
+  // why those are kept separate).
+  function classifyState(row, durationHistoryRows) {
+    const base = classify(row);
+    if (base !== "idle") return base;
+    const { seconds } = stateDurationFromHistory(durationHistoryRows || [], "idle");
+    return seconds >= CONFIG.INACTIVE_MINUTES * 60 ? "inactive" : "idle";
   }
 
   function ageSeconds(deviceDatetime) {
@@ -455,6 +506,7 @@ const API = (() => {
     fetchVehicleRevenueDailyMetrics,
     groupByVehicle,
     classify,
+    classifyState,
     ageSeconds,
     vehicleMetrics,
     fleetTimeSeries,

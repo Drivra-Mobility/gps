@@ -66,8 +66,8 @@
           <span
             class="info-tip"
             tabindex="0"
-            data-tooltip="States are mutually exclusive, checked in this order: Moving beats In maintenance beats In parking beats Idle. A stationary vehicle inside both geofences (shouldn't happen given how far apart they are) would count as In maintenance, never both."
-            aria-label="States are mutually exclusive, checked in this order: Moving beats In maintenance beats In parking beats Idle."
+            data-tooltip="States are mutually exclusive, checked in this order: Offline beats In maintenance beats In parking beats Moving beats Idle/Inactive. Being inside the maintenance or parking geofence always wins, even if the vehicle is moving inside it — those two states are about location, not whether the wheels are turning. Idle promotes to Inactive after 1 continuous hour stopped outside both geofences; any movement resets that clock back to Idle."
+            aria-label="States are mutually exclusive, checked in this order: Offline beats In maintenance beats In parking beats Moving beats Idle/Inactive. Location always wins over movement for maintenance/parking. Idle promotes to Inactive after 1 continuous hour stopped elsewhere; any movement resets the clock."
           ></span>
         </h2>
         <p class="kpi-value" id="kpi-maintenance">—</p>
@@ -81,7 +81,20 @@
       <article class="kpi">
         <h2><span class="swatch swatch-idle" aria-hidden="true"></span>Idle elsewhere</h2>
         <p class="kpi-value" id="kpi-idle">—</p>
-        <p class="kpi-note">stopped, outside parking</p>
+        <p class="kpi-note">stopped &lt;1h, outside parking/maintenance</p>
+      </article>
+      <article class="kpi">
+        <h2>
+          <span class="swatch swatch-inactive" aria-hidden="true"></span>Inactive
+          <span
+            class="info-tip"
+            tabindex="0"
+            data-tooltip="Stopped outside parking/maintenance for 1 continuous hour or more. Any movement, even brief, resets this clock back to Idle."
+            aria-label="Stopped outside parking/maintenance for 1 continuous hour or more. Any movement resets this clock back to Idle."
+          ></span>
+        </h2>
+        <p class="kpi-value" id="kpi-inactive">—</p>
+        <p class="kpi-note">stopped 1h+, outside parking</p>
       </article>
       <article class="kpi kpi-alert" id="kpi-offline-card">
         <h2><span class="swatch swatch-offline" aria-hidden="true"></span>Offline</h2>
@@ -142,7 +155,7 @@
       </header>
       <div class="attention-grid">
         <div>
-          <h3>Longest continuously idle or in maintenance</h3>
+          <h3>Longest continuously idle, inactive, or in maintenance</h3>
           <div class="leaderboard-list" id="attention-duration"></div>
         </div>
         <div>
@@ -161,6 +174,7 @@
             <li><span class="dot dot-maintenance" aria-hidden="true"></span>In maintenance</li>
             <li><span class="dot dot-parked" aria-hidden="true"></span>In parking</li>
             <li><span class="dot dot-idle" aria-hidden="true"></span>Idle</li>
+            <li><span class="dot dot-inactive" aria-hidden="true"></span>Inactive</li>
             <li><span class="dot dot-offline" aria-hidden="true"></span>Offline</li>
           </ul>
         </header>
@@ -253,7 +267,7 @@
     <footer class="foot">
       <span id="status">—</span>
       <span class="foot-sep">·</span>
-      <span>Auto-refreshes every 90s (paused while this tab is hidden)</span>
+      <span id="refresh-note">Auto-refreshes (paused while this tab is hidden)</span>
     </footer>
 
     <!-- Chart tooltips, portaled to a direct body child - NOT nested inside any

@@ -13,6 +13,9 @@
   let currentWindowHours = null; // last window loadAll() actually fetched a full history for
   let lastHistoryMaxPolledAt = null; // cursor for fetchHistoryDelta() - newest polled_at already in historyRows
   let lastSlowRefreshAt = 0; // driver mappings + today's metrics refresh on CONFIG.SLOW_REFRESH_MS, not every poll
+  let durationRows = []; // fixed CONFIG.INACTIVE_LOOKBACK_HOURS lookback, for Idle->Inactive duration only - independent of the display window (see classifyState())
+  let durationGrouped = new Map(); // imei -> durationRows for that vehicle
+  let lastDurationMaxPolledAt = null; // cursor for durationRows' own delta fetch
   let markers = new Map(); // imei -> Leaflet marker
   let prevStates = new Map(); // imei -> last-rendered classify() state, for the pulse-on-change effect
   let trailLayers = [];
@@ -101,11 +104,16 @@
     const hours = Number(document.getElementById("window").value);
     const isFreshWindow = hours !== currentWindowHours || historyRows.length === 0;
     const needsSlowRefresh = isFreshWindow || Date.now() - lastSlowRefreshAt >= CONFIG.SLOW_REFRESH_MS;
+    const isFreshDuration = durationRows.length === 0;
     const today = kathmanduToday();
 
-    const [latest, historyDelta, mappings, dayMetricsToday, revenueToday] = await Promise.all([
+    const [latest, historyDelta, durationDelta, mappings, dayMetricsToday, revenueToday] = await Promise.all([
       API.fetchLatest(),
       isFreshWindow ? API.fetchHistorySince(hours) : API.fetchHistoryDelta(lastHistoryMaxPolledAt),
+      // Independent of the display window - see CONFIG.INACTIVE_LOOKBACK_HOURS.
+      isFreshDuration
+        ? API.fetchHistorySince(CONFIG.INACTIVE_LOOKBACK_HOURS)
+        : API.fetchHistoryDelta(lastDurationMaxPolledAt),
       needsSlowRefresh ? API.fetchVehicleDriverMappings() : Promise.resolve(null),
       needsSlowRefresh ? API.fetchDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
       // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
@@ -120,6 +128,13 @@
     const newMax = API.maxPolledAt(historyDelta);
     if (newMax) lastHistoryMaxPolledAt = newMax;
     currentWindowHours = hours;
+
+    durationRows = isFreshDuration
+      ? durationDelta
+      : API.mergeHistoryRows(durationRows, durationDelta, CONFIG.INACTIVE_LOOKBACK_HOURS);
+    const newDurationMax = API.maxPolledAt(durationDelta);
+    if (newDurationMax) lastDurationMaxPolledAt = newDurationMax;
+    durationGrouped = API.groupByVehicle(durationRows);
 
     grouped = API.groupByVehicle(historyRows);
     metrics = new Map();
@@ -136,7 +151,7 @@
   }
 
   function rowState(row) {
-    return API.classify(row);
+    return API.classifyState(row, durationGrouped.get(row.imei_no) || []);
   }
 
   function driverName(imei) {
@@ -156,6 +171,7 @@
     animateNumber(document.getElementById("kpi-maintenance"), count("maintenance"));
     animateNumber(document.getElementById("kpi-parked"), count("parked"));
     animateNumber(document.getElementById("kpi-idle"), count("idle"));
+    animateNumber(document.getElementById("kpi-inactive"), count("inactive"));
     const offline = count("offline");
     animateNumber(document.getElementById("kpi-offline"), offline);
     document.getElementById("kpi-offline-card").classList.toggle("is-alerting", offline > 0);
@@ -244,8 +260,15 @@
     const durations = [];
     for (const row of latestRows) {
       const state = rowState(row);
-      if (state !== "idle" && state !== "maintenance") continue;
-      const d = API.stateDurationFromHistory(grouped.get(row.imei_no) || [], state);
+      if (state !== "idle" && state !== "inactive" && state !== "maintenance") continue;
+      // idle/inactive need the fixed-lookback duration set (a narrow
+      // display window would understate how long a streak has really run
+      // - see classifyState()); maintenance keeps using the display-window
+      // set, since durationGrouped's fixed ~1.5h lookback would UNDERSTATE
+      // a maintenance visit longer than that when a wider window is
+      // selected - this stat existed before Inactive did and shouldn't regress.
+      const historySource = state === "maintenance" ? grouped : durationGrouped;
+      const d = API.stateDurationFromHistory(historySource.get(row.imei_no) || [], state);
       if (d.seconds <= 0) continue;
       durations.push({
         name: labelWithDriver(row),
@@ -334,7 +357,12 @@
         }
       }
 
-      const stateDuration = API.stateDurationFromHistory(grouped.get(row.imei_no) || [], state);
+      // idle/inactive need the fixed-lookback duration set for the same
+      // reason as renderAttention() above; every other state keeps using
+      // the display-window set so its duration isn't capped to ~1.5h when
+      // a wider window is selected.
+      const durationSource = state === "idle" || state === "inactive" ? durationGrouped : grouped;
+      const stateDuration = API.stateDurationFromHistory(durationSource.get(row.imei_no) || [], state);
       marker.bindPopup(
         MAP.buildPopup(row, state, {
           link: `vehicle.html?imei=${encodeURIComponent(row.imei_no)}`,
@@ -530,6 +558,11 @@
     document.getElementById("window").addEventListener("change", refresh);
     document.getElementById("trails").addEventListener("change", renderMap);
     initTableSort();
+    // Was a hardcoded "90s" that drifted out of sync when REFRESH_MS was
+    // tuned (90s -> 120s -> 5min) - compute it instead so it can't drift again.
+    const refreshMin = CONFIG.REFRESH_MS / 60_000;
+    document.getElementById("refresh-note").textContent =
+      `Auto-refreshes every ${refreshMin < 1 ? `${CONFIG.REFRESH_MS / 1000}s` : `${refreshMin} min`} (paused while this tab is hidden)`;
     // Pauses while the tab is hidden instead of polling forever in the
     // background - see loading.js's pollWhileVisible() for why.
     LOADING.pollWhileVisible(refresh, CONFIG.REFRESH_MS);

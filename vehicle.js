@@ -12,6 +12,8 @@
   let currentWindowHours = null;
   let lastHistoryMaxPolledAt = null;
   let lastSlowRefreshAt = 0; // driver mapping refreshes on CONFIG.SLOW_REFRESH_MS, not every poll - see app.js
+  let durationRows = []; // fixed CONFIG.INACTIVE_LOOKBACK_HOURS lookback, for Idle->Inactive duration only - see app.js
+  let lastDurationMaxPolledAt = null;
   let map;
   let marker;
   let trailLine;
@@ -59,9 +61,14 @@
     const hours = Number(document.getElementById("window").value);
     const isFreshWindow = hours !== currentWindowHours || rows.length === 0;
     const needsSlowRefresh = isFreshWindow || Date.now() - lastSlowRefreshAt >= CONFIG.SLOW_REFRESH_MS;
+    const isFreshDuration = durationRows.length === 0;
 
-    const [historyDelta, mappings] = await Promise.all([
+    const [historyDelta, durationDelta, mappings] = await Promise.all([
       isFreshWindow ? API.fetchVehicleHistory(imei, hours) : API.fetchVehicleHistoryDelta(imei, lastHistoryMaxPolledAt),
+      // Independent of the display window - see CONFIG.INACTIVE_LOOKBACK_HOURS.
+      isFreshDuration
+        ? API.fetchVehicleHistory(imei, CONFIG.INACTIVE_LOOKBACK_HOURS)
+        : API.fetchVehicleHistoryDelta(imei, lastDurationMaxPolledAt),
       needsSlowRefresh ? API.fetchVehicleDriverMappings(imei) : Promise.resolve(null),
     ]);
 
@@ -69,6 +76,12 @@
     const newMax = API.maxPolledAt(historyDelta);
     if (newMax) lastHistoryMaxPolledAt = newMax;
     currentWindowHours = hours;
+
+    durationRows = isFreshDuration
+      ? durationDelta
+      : API.mergeHistoryRows(durationRows, durationDelta, CONFIG.INACTIVE_LOOKBACK_HOURS);
+    const newDurationMax = API.maxPolledAt(durationDelta);
+    if (newDurationMax) lastDurationMaxPolledAt = newDurationMax;
 
     if (needsSlowRefresh) {
       currentDriver = API.currentDriverByImei(mappings).get(imei) || null;
@@ -152,7 +165,11 @@
       MAP.animateMarkerTo(marker, [latest.latitude, latest.longitude]);
       marker.setIcon(icon);
     }
-    const stateDuration = API.stateDurationFromHistory(rows, state);
+    // idle/inactive need the fixed-lookback duration set (see app.js's
+    // matching comment); every other state keeps using the display-window
+    // rows so its duration isn't capped to ~1.5h when a wider window is selected.
+    const durationSource = state === "idle" || state === "inactive" ? durationRows : rows;
+    const stateDuration = API.stateDurationFromHistory(durationSource, state);
     const driverName = currentDriver ? currentDriver.driver_name || currentDriver.driver_phone : null;
     marker.bindPopup(MAP.buildPopup(latest, state, { stateDuration, driverName }));
   }
@@ -253,7 +270,7 @@
     document.getElementById("not-found").hidden = true;
     document.getElementById("veh-content").hidden = false;
     const latest = rows[rows.length - 1];
-    const state = API.classify(latest);
+    const state = API.classifyState(latest, durationRows);
     const m = API.vehicleMetrics(rows);
     renderHeader(latest);
     renderKpis(latest, m, state);
@@ -294,6 +311,11 @@
     document.getElementById("sign-out").hidden = false;
     document.getElementById("sign-out").addEventListener("click", () => AUTH.signOut());
     document.getElementById("window").addEventListener("change", refresh);
+    // Was a hardcoded "90s" that drifted out of sync when REFRESH_MS was
+    // tuned (90s -> 120s -> 5min) - compute it instead so it can't drift again.
+    const refreshMin = CONFIG.REFRESH_MS / 60_000;
+    document.getElementById("refresh-note").textContent =
+      `Auto-refreshes every ${refreshMin < 1 ? `${CONFIG.REFRESH_MS / 1000}s` : `${refreshMin} min`} (paused while this tab is hidden)`;
     // Pauses while the tab is hidden instead of polling forever in the
     // background - see loading.js's pollWhileVisible() for why.
     LOADING.pollWhileVisible(refresh, CONFIG.REFRESH_MS);

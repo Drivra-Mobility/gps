@@ -9,6 +9,7 @@ const MAP = (() => {
     maintenance: "In maintenance",
     parked: "In parking",
     idle: "Idle",
+    inactive: "Inactive",
     offline: "Offline",
   };
 
@@ -128,7 +129,14 @@ const MAP = (() => {
       shape = `<rect x="6" y="6" width="12" height="12" rx="3" fill="${color}"/>`;
     } else if (state === "idle") {
       shape = `<circle cx="12" cy="12" r="7" fill="${color}"/>`;
+    } else if (state === "inactive") {
+      // Hollow, solid-stroke circle - same shape family as idle's filled
+      // dot ("hollowed out" once it's aged past the threshold), but solid
+      // (not dashed) so it stays unambiguous against offline's dashed
+      // hollow circle at a glance and in greyscale.
+      shape = `<circle cx="12" cy="12" r="7" fill="none" stroke="${color}" stroke-width="2"/>`;
     } else {
+      // offline
       shape = `<circle cx="12" cy="12" r="7" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="3 2"/>`;
     }
     const html = `<span class="marker"><svg width="${size}" height="${size}" viewBox="0 0 24 24">${shape}</svg></span>`;

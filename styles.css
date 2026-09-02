@@ -32,6 +32,15 @@
   --state-parked: #1baf7a;
   --state-idle: #eda100;
   --state-maintenance: #eb6834;
+  /* Categorical magenta (palette.md slot 5, #e87ba4), nudged +0.04 OKLCH L
+     to #f687b0 - stock magenta clears every check against moving/parked/
+     idle but fails the normal-vision floor against maintenance-orange
+     (#eb6834, ΔE 12.9, needs >=15); this step clears all of it. Validated
+     with the dataviz skill's validator, --pairs all (map markers can sit
+     next to any other state, so adjacent-only isn't enough), 2026-08-27.
+     The remaining reported failure at this step is idle-vs-maintenance
+     (#eda100/#eb6834, ΔE 13.7) - pre-existing, unrelated to this addition. */
+  --state-inactive: #f687b0;
   --state-offline: #898781;
   /* Financial charts only (revenue) - deliberately NOT a vehicle state, so
      it's visually distinct from the --state-* set. Validated via the
@@ -70,6 +79,14 @@
     --state-parked: #199e70;
     --state-idle: #c98500;
     --state-maintenance: #d95926;
+    /* Categorical magenta (palette.md slot 5 dark step, #d55181), nudged
+       -0.08 OKLCH L to #b9376a - stock dark magenta fails CVD separation
+       against parked/aqua (#199e70, ΔE 1.6 deutan, needs >=6); this step
+       clears every check against moving/parked/idle. Validated with the
+       dataviz skill's validator, --pairs all, 2026-08-27. The remaining
+       reported failure at this step is idle-vs-maintenance (#c98500/
+       #d95926, ΔE 10.6) - pre-existing, unrelated to this addition. */
+    --state-inactive: #b9376a;
     --state-offline: #898781;
     --series-revenue: #9085e9;
 
@@ -97,6 +114,8 @@
   --state-parked: #199e70;
   --state-idle: #c98500;
   --state-maintenance: #d95926;
+  /* Same as the @media dark block above - keep both in sync. */
+  --state-inactive: #b9376a;
   --state-offline: #898781;
   --series-revenue: #9085e9;
 
@@ -507,6 +526,10 @@ input[type="date"] {
 .swatch-idle {
   background: var(--state-idle);
 }
+.swatch-inactive {
+  background: transparent;
+  border: 1.5px solid var(--state-inactive);
+}
 .swatch-maintenance {
   background: var(--state-maintenance);
   transform: rotate(45deg);
@@ -641,6 +664,10 @@ input[type="date"] {
 }
 .dot-idle {
   background: var(--state-idle);
+}
+.dot-inactive {
+  background: transparent;
+  border: 1.5px solid var(--state-inactive);
 }
 .dot-maintenance {
   background: var(--state-maintenance);
@@ -946,6 +973,9 @@ tbody tr:hover {
 }
 .state-idle::before {
   background: var(--state-idle);
+}
+.state-inactive::before {
+  border: 1.5px solid var(--state-inactive);
 }
 .state-maintenance::before {
   background: var(--state-maintenance);
