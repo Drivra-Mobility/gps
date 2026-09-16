@@ -108,31 +108,56 @@
     const today = kathmanduToday();
 
     const [latest, historyDelta, durationDelta, mappings, dayMetricsToday, revenueToday] = await Promise.all([
-      API.fetchLatest(),
-      isFreshWindow ? API.fetchHistorySince(hours) : API.fetchHistoryDelta(lastHistoryMaxPolledAt),
+      API.fetchLatest().catch((err) => {
+        console.error("fetchLatest error:", err);
+        return [];
+      }),
+      (isFreshWindow ? API.fetchHistorySince(hours) : API.fetchHistoryDelta(lastHistoryMaxPolledAt)).catch((err) => {
+        console.error("fetchHistory error:", err);
+        return [];
+      }),
       // Independent of the display window - see CONFIG.INACTIVE_LOOKBACK_HOURS.
-      isFreshDuration
+      (isFreshDuration
         ? API.fetchHistorySince(CONFIG.INACTIVE_LOOKBACK_HOURS)
-        : API.fetchHistoryDelta(lastDurationMaxPolledAt),
-      needsSlowRefresh ? API.fetchVehicleDriverMappings() : Promise.resolve(null),
-      needsSlowRefresh ? API.fetchDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
+        : API.fetchHistoryDelta(lastDurationMaxPolledAt)
+      ).catch((err) => {
+        console.error("fetchDuration error:", err);
+        return [];
+      }),
+      needsSlowRefresh
+        ? API.fetchVehicleDriverMappings().catch((err) => {
+            console.error("fetchMappings error:", err);
+            return [];
+          })
+        : Promise.resolve(null),
+      needsSlowRefresh
+        ? API.fetchDailyMetrics({ startDate: today, endDate: today }).catch((err) => {
+            console.error("fetchDailyMetrics error:", err);
+            return [];
+          })
+        : Promise.resolve(null),
       // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
       // above, ~15min behind via fleet.*_cache) - always fully live.
-      needsSlowRefresh ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
+      needsSlowRefresh
+        ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }).catch((err) => {
+            console.error("fetchRevenue error:", err);
+            return [];
+          })
+        : Promise.resolve(null),
     ]);
 
-    latestRows = latest;
+    latestRows = latest || [];
     historyRows = isFreshWindow
-      ? historyDelta
-      : API.mergeHistoryRows(historyRows, historyDelta, hours);
-    const newMax = API.maxPolledAt(historyDelta);
+      ? (historyDelta || [])
+      : API.mergeHistoryRows(historyRows, historyDelta || [], hours);
+    const newMax = API.maxPolledAt(historyDelta || []);
     if (newMax) lastHistoryMaxPolledAt = newMax;
     currentWindowHours = hours;
 
     durationRows = isFreshDuration
-      ? durationDelta
-      : API.mergeHistoryRows(durationRows, durationDelta, CONFIG.INACTIVE_LOOKBACK_HOURS);
-    const newDurationMax = API.maxPolledAt(durationDelta);
+      ? (durationDelta || [])
+      : API.mergeHistoryRows(durationRows, durationDelta || [], CONFIG.INACTIVE_LOOKBACK_HOURS);
+    const newDurationMax = API.maxPolledAt(durationDelta || []);
     if (newDurationMax) lastDurationMaxPolledAt = newDurationMax;
     durationGrouped = API.groupByVehicle(durationRows);
 
@@ -143,9 +168,9 @@
     }
 
     if (needsSlowRefresh) {
-      driverByImei = API.currentDriverByImei(mappings);
-      distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
-      revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
+      if (mappings) driverByImei = API.currentDriverByImei(mappings);
+      if (dayMetricsToday) distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
+      if (revenueToday) revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
       lastSlowRefreshAt = Date.now();
     }
   }
