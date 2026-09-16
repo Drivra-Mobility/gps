@@ -107,42 +107,32 @@
     const isFreshDuration = durationRows.length === 0;
     const today = kathmanduToday();
 
-    // Stage 1: Fast initial paint with latest vehicle positions (<500ms)
-    const latest = await API.fetchLatest().catch((err) => {
-      console.error("fetchLatest error:", err);
-      return [];
-    });
-    if (latest && latest.length) {
-      latestRows = latest;
-      renderAll();
-    }
-
-    // Stage 2: Load movement history and inactive duration in parallel
-    const [historyDelta, durationDelta] = await Promise.all([
-      (isFreshWindow ? API.fetchHistorySince(hours) : API.fetchHistoryDelta(lastHistoryMaxPolledAt)).catch((err) => {
-        console.error("fetchHistory error:", err);
-        return [];
-      }),
-      (isFreshDuration
+    const [latest, historyDelta, durationDelta, mappings, dayMetricsToday, revenueToday] = await Promise.all([
+      API.fetchLatest(),
+      isFreshWindow ? API.fetchHistorySince(hours) : API.fetchHistoryDelta(lastHistoryMaxPolledAt),
+      // Independent of the display window - see CONFIG.INACTIVE_LOOKBACK_HOURS.
+      isFreshDuration
         ? API.fetchHistorySince(CONFIG.INACTIVE_LOOKBACK_HOURS)
-        : API.fetchHistoryDelta(lastDurationMaxPolledAt)
-      ).catch((err) => {
-        console.error("fetchDuration error:", err);
-        return [];
-      }),
+        : API.fetchHistoryDelta(lastDurationMaxPolledAt),
+      needsSlowRefresh ? API.fetchVehicleDriverMappings() : Promise.resolve(null),
+      needsSlowRefresh ? API.fetchDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
+      // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
+      // above, ~15min behind via fleet.*_cache) - always fully live.
+      needsSlowRefresh ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
     ]);
 
+    latestRows = latest;
     historyRows = isFreshWindow
-      ? (historyDelta || [])
-      : API.mergeHistoryRows(historyRows, historyDelta || [], hours);
-    const newMax = API.maxPolledAt(historyDelta || []);
+      ? historyDelta
+      : API.mergeHistoryRows(historyRows, historyDelta, hours);
+    const newMax = API.maxPolledAt(historyDelta);
     if (newMax) lastHistoryMaxPolledAt = newMax;
     currentWindowHours = hours;
 
     durationRows = isFreshDuration
-      ? (durationDelta || [])
-      : API.mergeHistoryRows(durationRows, durationDelta || [], CONFIG.INACTIVE_LOOKBACK_HOURS);
-    const newDurationMax = API.maxPolledAt(durationDelta || []);
+      ? durationDelta
+      : API.mergeHistoryRows(durationRows, durationDelta, CONFIG.INACTIVE_LOOKBACK_HOURS);
+    const newDurationMax = API.maxPolledAt(durationDelta);
     if (newDurationMax) lastDurationMaxPolledAt = newDurationMax;
     durationGrouped = API.groupByVehicle(durationRows);
 
@@ -151,21 +141,12 @@
     for (const [imei, rows] of grouped.entries()) {
       metrics.set(imei, API.vehicleMetrics(rows));
     }
-    renderAll();
 
-    // Stage 3: Background analytics & driver mappings (never blocks the map or UI)
     if (needsSlowRefresh) {
-      const [mappings, dayMetricsToday, revenueToday] = await Promise.all([
-        API.fetchVehicleDriverMappings().catch(() => []),
-        API.fetchDailyMetrics({ startDate: today, endDate: today }).catch(() => []),
-        API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }).catch(() => []),
-      ]);
-
-      if (mappings && mappings.length) driverByImei = API.currentDriverByImei(mappings);
-      if (dayMetricsToday && dayMetricsToday.length) distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
-      if (revenueToday && revenueToday.length) revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
+      driverByImei = API.currentDriverByImei(mappings);
+      distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
+      revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
       lastSlowRefreshAt = Date.now();
-      renderAll();
     }
   }
 
