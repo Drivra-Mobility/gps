@@ -381,10 +381,19 @@ const CHART = (() => {
     const xScale = (t) => margin.left + ((t - rMin) / rSpan) * innerW;
 
     function fmtRange(start, end) {
-      const timeOpts = { hour: "2-digit", minute: "2-digit" };
-      const sameDay = start.toDateString() === end.toDateString();
-      const startStr = start.toLocaleString([], sameDay ? timeOpts : { month: "short", day: "numeric", ...timeOpts });
-      return `${startStr} – ${end.toLocaleTimeString([], timeOpts)}`;
+      const tz = (typeof CONFIG !== "undefined" && CONFIG.TIMEZONE) || undefined;
+      const timeOpts = { hour: "2-digit", minute: "2-digit", timeZone: tz };
+      const dateOpts = { month: "short", day: "numeric", timeZone: tz };
+
+      const startDateStr = start.toLocaleDateString("en-US", dateOpts);
+      const endDateStr = end.toLocaleDateString("en-US", dateOpts);
+      const startTimeStr = start.toLocaleTimeString("en-US", timeOpts);
+      const endTimeStr = end.toLocaleTimeString("en-US", timeOpts);
+
+      if (startDateStr === endDateStr) {
+        return `${startDateStr} · ${startTimeStr} – ${endTimeStr}`;
+      }
+      return `${startDateStr}, ${startTimeStr} – ${endDateStr}, ${endTimeStr}`;
     }
 
     // X-axis: first / middle / last timestamp.

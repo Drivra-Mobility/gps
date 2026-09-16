@@ -72,9 +72,8 @@
   }
 
   async function loadMisuse() {
-    const lookbackDays = Number(document.getElementById("misuse-lookback").value);
-    const endDate = kathmanduToday();
-    const startDate = kathmanduDateShift(endDate, -(lookbackDays - 1));
+    const startDate = document.getElementById("range-start").value;
+    const endDate = document.getElementById("range-end").value;
     const rows = await API.fetchRideMatchDailyMetrics({ startDate, endDate });
     dayMetrics = rows;
     document.getElementById("misuse-truncation-warning").hidden = rows.length < 1000;
@@ -465,24 +464,25 @@
     );
   }
 
-  async function selectMisuseRow(imei) {
-    selectedMisuseImei = imei;
-    renderMisuseTable();
+  async function loadVehicleTimeline(imei) {
+    if (!imei) return;
+    const startEl = document.getElementById("timeline-start");
+    const endEl = document.getElementById("timeline-end");
+    const today = kathmanduToday();
 
-    const panel = document.getElementById("misuse-detail-panel");
-    panel.hidden = false;
-    const row = scores.find((s) => s.imei_no === imei);
-    document.getElementById("misuse-detail-title").textContent = row.vehicle_no || imei;
+    startEl.max = today;
+    endEl.max = today;
 
-    const lookbackDays = Number(document.getElementById("misuse-lookback").value);
-    const endDate = kathmanduToday();
-    const startDate = kathmanduDateShift(endDate, -(lookbackDays - 1));
-    document.getElementById("misuse-detail-sub").textContent = `${startDate} to ${endDate}`;
+    if (endEl.value > today) endEl.value = today;
+    if (startEl.value > today) startEl.value = today;
+    if (startEl.value > endEl.value) startEl.value = endEl.value;
 
-    const hours = CONFIG.MISUSE_TIMELINE_HOURS;
-    const rangeEnd = new Date();
-    const rangeStart = new Date(rangeEnd.getTime() - hours * 3600000);
-    document.getElementById("misuse-timeline-sub").textContent = `last ${Math.round(hours / 24)} days`;
+    const startDate = startEl.value;
+    const endDate = endEl.value;
+    document.getElementById("misuse-timeline-sub").textContent = `${startDate} to ${endDate}`;
+
+    const rangeStart = new Date(`${startDate}T00:00:00+05:45`);
+    const rangeEnd = new Date(`${endDate}T23:59:59+05:45`);
 
     LOADING.start();
     let segments = [];
@@ -505,7 +505,7 @@
 
     let history = [];
     try {
-      history = await API.fetchVehicleHistory(imei, hours);
+      history = await API.fetchVehicleHistoryRange(imei, startDate, endDate);
     } catch (err) {
       console.error(err);
     } finally {
@@ -515,6 +515,33 @@
     currentHistory = history; // scrub lookups (handleScrub) read this
     renderMisuseMap(segments, history, rangeStart);
     renderMisuseTimeline(segments, rides, history, rangeStart, rangeEnd);
+  }
+
+  async function selectMisuseRow(imei) {
+    selectedMisuseImei = imei;
+    renderMisuseTable();
+
+    const panel = document.getElementById("misuse-detail-panel");
+    panel.hidden = false;
+    const row = scores.find((s) => s.imei_no === imei);
+    document.getElementById("misuse-detail-title").textContent = row ? (row.vehicle_no || imei) : imei;
+
+    const startDate = document.getElementById("range-start").value;
+    const endDate = document.getElementById("range-end").value;
+    document.getElementById("misuse-detail-sub").textContent = `${startDate} to ${endDate}`;
+
+    // Prefill timeline date fields to the latest 3 days (today - 2 to today)
+    const today = kathmanduToday();
+    const tlStart = kathmanduDateShift(today, -2);
+    const tlStartEl = document.getElementById("timeline-start");
+    const tlEndEl = document.getElementById("timeline-end");
+
+    tlStartEl.value = tlStart;
+    tlStartEl.max = today;
+    tlEndEl.value = today;
+    tlEndEl.max = today;
+
+    await loadVehicleTimeline(imei);
   }
 
   // ---- orchestration --------------------------------------------------
@@ -541,10 +568,31 @@
     }
   }
 
+  function initDefaultRange() {
+    const today = kathmanduToday();
+    const start = kathmanduDateShift(today, -29);
+    const startEl = document.getElementById("range-start");
+    const endEl = document.getElementById("range-end");
+    startEl.value = start;
+    startEl.max = today;
+    endEl.value = today;
+    endEl.max = today;
+
+    const tlStartEl = document.getElementById("timeline-start");
+    const tlEndEl = document.getElementById("timeline-end");
+    if (tlStartEl && tlEndEl) {
+      tlStartEl.value = kathmanduDateShift(today, -2);
+      tlStartEl.max = today;
+      tlEndEl.value = today;
+      tlEndEl.max = today;
+    }
+  }
+
   function start() {
     document.getElementById("sign-out").hidden = false;
     document.getElementById("sign-out").addEventListener("click", () => AUTH.signOut());
-    document.getElementById("misuse-lookback").addEventListener("change", async () => {
+    initDefaultRange();
+    const onRangeChange = async () => {
       selectedMisuseImei = null;
       lastTimelineRender = null;
       document.getElementById("misuse-detail-panel").hidden = true;
@@ -555,6 +603,14 @@
       } finally {
         LOADING.stop();
       }
+    };
+    document.getElementById("range-start").addEventListener("change", onRangeChange);
+    document.getElementById("range-end").addEventListener("change", onRangeChange);
+    document.getElementById("timeline-start").addEventListener("change", () => {
+      if (selectedMisuseImei) loadVehicleTimeline(selectedMisuseImei);
+    });
+    document.getElementById("timeline-end").addEventListener("change", () => {
+      if (selectedMisuseImei) loadVehicleTimeline(selectedMisuseImei);
     });
     refresh();
     window.addEventListener("resize", () => {

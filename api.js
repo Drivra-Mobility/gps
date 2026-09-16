@@ -106,6 +106,19 @@ const API = (() => {
     return data;
   }
 
+  // Single vehicle's history within an arbitrary date range (Kathmandu calendar dates).
+  async function fetchVehicleHistoryRange(imei, startDate, endDate) {
+    let q = AUTH.client
+      .from("vehicle_positions")
+      .select("*")
+      .eq("imei_no", imei);
+    if (startDate) q = q.gte("polled_at", `${startDate}T00:00:00+05:45`);
+    if (endDate) q = q.lte("polled_at", `${endDate}T23:59:59+05:45`);
+    const { data, error } = await q.order("polled_at");
+    if (error) throw error;
+    return data;
+  }
+
   // Delta version of fetchVehicleHistory - see fetchHistoryDelta() above,
   // same idea scoped to one vehicle. Pair with mergeHistoryRows().
   async function fetchVehicleHistoryDelta(imei, sinceIso) {
@@ -492,6 +505,7 @@ const API = (() => {
     mergeHistoryRows,
     maxPolledAt,
     fetchVehicleHistory,
+    fetchVehicleHistoryRange,
     fetchVehicleHistoryDelta,
     fetchDailyMetrics,
     fetchMaintenanceVisits,

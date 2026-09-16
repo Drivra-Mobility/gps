@@ -169,8 +169,12 @@
   function initDefaultRange() {
     const end = kathmanduToday();
     const start = kathmanduDateShift(end, -(CONFIG.ANALYTICS_DEFAULT_RANGE_DAYS - 1));
-    document.getElementById("range-start").value = start;
-    document.getElementById("range-end").value = end;
+    const startEl = document.getElementById("range-start");
+    const endEl = document.getElementById("range-end");
+    startEl.value = start;
+    startEl.max = end;
+    endEl.value = end;
+    endEl.max = end;
   }
 
   function start() {
