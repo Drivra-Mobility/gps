@@ -12,7 +12,26 @@
 // disable public email sign-ups in Authentication > Providers > Email so a
 // stranger with the URL can't just register their own account.
 const AUTH = (() => {
-  const client = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  // Custom fetch with timeout to prevent auth network requests from hanging indefinitely
+  const fetchWithTimeout = (url, options = {}) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    return fetch(url, {
+      ...options,
+      signal: options.signal || controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
+  };
+
+  const client = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+    global: {
+      fetch: fetchWithTimeout,
+    },
+  });
 
   let overlay = null;
 
@@ -58,8 +77,6 @@ const AUTH = (() => {
         errEl.textContent = error.message || "Sign-in failed.";
         errEl.hidden = false;
       }
-      // On success, onAuthStateChange (registered in requireAuth) hides the
-      // overlay and starts the app - no need to duplicate that here.
     };
   }
 
@@ -74,22 +91,54 @@ const AUTH = (() => {
   // Calls onReady(session) once signed in, and again on every subsequent
   // sign-in (e.g. after a sign-out). Shows/hides the login overlay to match.
   function requireAuth(onReady) {
-    client.auth.onAuthStateChange((event, session) => {
+    let initialized = false;
+
+    const handleSession = (session) => {
+      if (initialized) return;
       if (session) {
+        initialized = true;
         hideOverlay();
         onReady(session);
       } else {
+        initialized = true;
         showOverlay();
       }
-    });
-    client.auth.getSession().then(({ data }) => {
-      if (data.session) {
+    };
+
+    client.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        showOverlay();
+      } else if (session) {
         hideOverlay();
-        onReady(data.session);
-      } else {
-        showOverlay();
+        if (!initialized) {
+          initialized = true;
+          onReady(session);
+        }
       }
     });
+
+    // Handle initial session with a 4s safety timeout fallback
+    client.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn("Auth getSession error:", error);
+          handleSession(null);
+        } else {
+          handleSession(data.session);
+        }
+      })
+      .catch((err) => {
+        console.warn("Auth getSession exception:", err);
+        handleSession(null);
+      });
+
+    setTimeout(() => {
+      if (!initialized) {
+        console.warn("Auth check timed out, prompting login overlay");
+        handleSession(null);
+      }
+    }, 4000);
   }
 
   return { client, requireAuth, signOut };

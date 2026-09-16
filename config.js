@@ -114,7 +114,7 @@ const CONFIG = {
   // exceeding PostgREST's default 1000-row response cap - the same
   // ceiling that can already silently truncate the "Last 24 hours" history
   // option above for a large enough fleet.
-  ANALYTICS_DEFAULT_RANGE_DAYS: 14,
+  ANALYTICS_DEFAULT_RANGE_DAYS: 7,
 
   // How far back to scan when checking which vehicles are CURRENTLY mid
   // maintenance-visit (maintenance.html's "ongoing visits" fetch,
@@ -129,7 +129,7 @@ const CONFIG = {
   // vanishingly rare; if it happens, is_ongoing still reads correctly true,
   // only its visit_start/duration read from this window's edge instead of
   // the true start - a truncated number beats a blank page.
-  MAINTENANCE_ONGOING_LOOKBACK_DAYS: 30,
+  MAINTENANCE_ONGOING_LOOKBACK_DAYS: 14,
 
   // Vehicle-type icon classification for the map (cosmetic only - purely
   // for choosing a marker glyph). There is no vehicle-type column in

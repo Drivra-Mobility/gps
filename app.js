@@ -107,16 +107,22 @@
     const isFreshDuration = durationRows.length === 0;
     const today = kathmanduToday();
 
-    const [latest, historyDelta, durationDelta, mappings, dayMetricsToday, revenueToday] = await Promise.all([
-      API.fetchLatest().catch((err) => {
-        console.error("fetchLatest error:", err);
-        return [];
-      }),
+    // Stage 1: Fast initial paint with latest vehicle positions (<500ms)
+    const latest = await API.fetchLatest().catch((err) => {
+      console.error("fetchLatest error:", err);
+      return [];
+    });
+    if (latest && latest.length) {
+      latestRows = latest;
+      renderAll();
+    }
+
+    // Stage 2: Load movement history and inactive duration in parallel
+    const [historyDelta, durationDelta] = await Promise.all([
       (isFreshWindow ? API.fetchHistorySince(hours) : API.fetchHistoryDelta(lastHistoryMaxPolledAt)).catch((err) => {
         console.error("fetchHistory error:", err);
         return [];
       }),
-      // Independent of the display window - see CONFIG.INACTIVE_LOOKBACK_HOURS.
       (isFreshDuration
         ? API.fetchHistorySince(CONFIG.INACTIVE_LOOKBACK_HOURS)
         : API.fetchHistoryDelta(lastDurationMaxPolledAt)
@@ -124,29 +130,8 @@
         console.error("fetchDuration error:", err);
         return [];
       }),
-      needsSlowRefresh
-        ? API.fetchVehicleDriverMappings().catch((err) => {
-            console.error("fetchMappings error:", err);
-            return [];
-          })
-        : Promise.resolve(null),
-      needsSlowRefresh
-        ? API.fetchDailyMetrics({ startDate: today, endDate: today }).catch((err) => {
-            console.error("fetchDailyMetrics error:", err);
-            return [];
-          })
-        : Promise.resolve(null),
-      // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
-      // above, ~15min behind via fleet.*_cache) - always fully live.
-      needsSlowRefresh
-        ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }).catch((err) => {
-            console.error("fetchRevenue error:", err);
-            return [];
-          })
-        : Promise.resolve(null),
     ]);
 
-    latestRows = latest || [];
     historyRows = isFreshWindow
       ? (historyDelta || [])
       : API.mergeHistoryRows(historyRows, historyDelta || [], hours);
@@ -166,12 +151,21 @@
     for (const [imei, rows] of grouped.entries()) {
       metrics.set(imei, API.vehicleMetrics(rows));
     }
+    renderAll();
 
+    // Stage 3: Background analytics & driver mappings (never blocks the map or UI)
     if (needsSlowRefresh) {
-      if (mappings) driverByImei = API.currentDriverByImei(mappings);
-      if (dayMetricsToday) distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
-      if (revenueToday) revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
+      const [mappings, dayMetricsToday, revenueToday] = await Promise.all([
+        API.fetchVehicleDriverMappings().catch(() => []),
+        API.fetchDailyMetrics({ startDate: today, endDate: today }).catch(() => []),
+        API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }).catch(() => []),
+      ]);
+
+      if (mappings && mappings.length) driverByImei = API.currentDriverByImei(mappings);
+      if (dayMetricsToday && dayMetricsToday.length) distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
+      if (revenueToday && revenueToday.length) revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
       lastSlowRefreshAt = Date.now();
+      renderAll();
     }
   }
 

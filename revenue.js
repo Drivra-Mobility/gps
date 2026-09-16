@@ -70,13 +70,11 @@
 
   function renderCharts() {
     const byDate = new Map();
-    for (const r of revenueMetrics) {
+    for (const r of (revenueMetrics || [])) {
       byDate.set(r.local_date, (byDate.get(r.local_date) || 0) + (r.gross_revenue || 0));
     }
-    // Dates come from dayMetrics (one row per vehicle per tracked day), not
-    // just revenueMetrics, so the trend line doesn't gap on genuinely
-    // zero-revenue days.
-    const dates = [...new Set(dayMetrics.map((r) => r.local_date))].sort();
+    // Dates come from dayMetrics and revenueMetrics so the trend line doesn't gap on zero-revenue days
+    const dates = [...new Set([...(dayMetrics || []).map((r) => r.local_date), ...(revenueMetrics || []).map((r) => r.local_date)])].sort();
     CHART.lineChart(
       document.getElementById("chart-revenue-day"),
       dates.map((d) => ({ x: new Date(`${d}T00:00:00Z`), y: byDate.get(d) || 0 })),

@@ -74,10 +74,13 @@
   async function loadMisuse() {
     const startDate = document.getElementById("range-start").value;
     const endDate = document.getElementById("range-end").value;
-    const rows = await API.fetchRideMatchDailyMetrics({ startDate, endDate });
-    dayMetrics = rows;
-    document.getElementById("misuse-truncation-warning").hidden = rows.length < 1000;
-    scores = computeConfidenceScores(rows, endDate);
+    const rows = await API.fetchRideMatchDailyMetrics({ startDate, endDate }).catch((e) => {
+      console.warn("fetchRideMatchDailyMetrics failed", e);
+      return [];
+    });
+    dayMetrics = rows || [];
+    document.getElementById("misuse-truncation-warning").hidden = dayMetrics.length < 1000;
+    scores = computeConfidenceScores(dayMetrics, endDate);
   }
 
   // ---- confidence score ---------------------------------------------
@@ -570,7 +573,7 @@
 
   function initDefaultRange() {
     const today = kathmanduToday();
-    const start = kathmanduDateShift(today, -29);
+    const start = kathmanduDateShift(today, -6);
     const startEl = document.getElementById("range-start");
     const endEl = document.getElementById("range-end");
     startEl.value = start;

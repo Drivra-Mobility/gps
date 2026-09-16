@@ -2,6 +2,17 @@
 // Every function here reads from Supabase via AUTH.client (auth.js), which
 // carries the signed-in session automatically.
 const API = (() => {
+  const DEFAULT_TIMEOUT_MS = 12_000;
+
+  function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS, label = "Query") {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms)
+      ),
+    ]);
+  }
+
   function windowStartIso(hours) {
     return new Date(Date.now() - hours * 3600_000).toISOString();
   }
@@ -10,37 +21,45 @@ const API = (() => {
   // view (a DISTINCT ON, computed in Postgres) rather than pulling full
   // history and reducing client-side.
   async function fetchLatest() {
-    const { data, error } = await AUTH.client
-      .from("vehicle_latest")
-      .select("*")
-      .order("vehicle_no");
-    if (error) throw error;
-    return data;
+    return withTimeout(
+      AUTH.client
+        .from("vehicle_latest")
+        .select("*")
+        .order("vehicle_no")
+        .then(({ data, error }) => {
+          if (error) throw error;
+          return data;
+        }),
+      8000,
+      "fetchLatest"
+    );
   }
 
   // Full-fleet history within the window, ordered so it comes back
   // pre-grouped by vehicle. Drives the fleet time-series charts, the
   // distance-travelled leaderboard, and the trails on the map.
   async function fetchHistorySince(hours) {
-    const { data, error } = await AUTH.client
-      .from("vehicle_positions")
-      .select(
-        "imei_no, vehicle_no, latitude, longitude, speed, status, polled_at, device_datetime"
-      )
-      .gte("polled_at", windowStartIso(hours))
-      .order("imei_no")
-      .order("polled_at");
-    if (error) throw error;
-    return data;
+    return withTimeout(
+      AUTH.client
+        .from("vehicle_positions")
+        .select(
+          "imei_no, vehicle_no, latitude, longitude, speed, status, polled_at, device_datetime"
+        )
+        .gte("polled_at", windowStartIso(hours))
+        .order("imei_no")
+        .order("polled_at")
+        .then(({ data, error }) => {
+          if (error) throw error;
+          return data;
+        }),
+      12000,
+      "fetchHistorySince"
+    );
   }
 
   // Same shape as fetchHistorySince, but only rows strictly newer than
   // sinceIso - for a page that's already polling on a timer and just wants
   // what's new since its last poll, not the whole window again every time.
-  // Pair with mergeHistoryRows() below to fold the delta into what's
-  // already in hand. sinceIso null/undefined falls back to "everything"
-  // (equivalent to no lower bound) - callers should have a real value once
-  // they've fetched at least once.
   async function fetchHistoryDelta(sinceIso) {
     let q = AUTH.client
       .from("vehicle_positions")
@@ -50,9 +69,14 @@ const API = (() => {
       .order("imei_no")
       .order("polled_at");
     if (sinceIso) q = q.gt("polled_at", sinceIso);
-    const { data, error } = await q;
-    if (error) throw error;
-    return data;
+    return withTimeout(
+      q.then(({ data, error }) => {
+        if (error) throw error;
+        return data;
+      }),
+      10000,
+      "fetchHistoryDelta"
+    );
   }
 
   // Folds a delta fetch into an existing history array: de-dupes by
@@ -96,14 +120,23 @@ const API = (() => {
   // detail page. Filtered at the database rather than pulling the fleet and
   // discarding 24/25 of it.
   async function fetchVehicleHistory(imei, hours) {
-    const { data, error } = await AUTH.client
-      .from("vehicle_positions")
-      .select("*")
-      .eq("imei_no", imei)
-      .gte("polled_at", windowStartIso(hours))
-      .order("polled_at");
-    if (error) throw error;
-    return data;
+    return withTimeout(
+      AUTH.client
+        .from("vehicle_positions")
+        .select("*")
+        .eq("imei_no", imei)
+        .gte("polled_at", windowStartIso(hours))
+        .order("polled_at")
+        .then(({ data, error }) => {
+          if (error) throw error;
+          return data || [];
+        }),
+      10000,
+      "fetchVehicleHistory"
+    ).catch((err) => {
+      console.warn("[API] fetchVehicleHistory failed:", err?.message || err);
+      return [];
+    });
   }
 
   // Single vehicle's history within an arbitrary date range (Kathmandu calendar dates).
@@ -114,9 +147,17 @@ const API = (() => {
       .eq("imei_no", imei);
     if (startDate) q = q.gte("polled_at", `${startDate}T00:00:00+05:45`);
     if (endDate) q = q.lte("polled_at", `${endDate}T23:59:59+05:45`);
-    const { data, error } = await q.order("polled_at");
-    if (error) throw error;
-    return data;
+    return withTimeout(
+      q.order("polled_at").then(({ data, error }) => {
+        if (error) throw error;
+        return data || [];
+      }),
+      12000,
+      "fetchVehicleHistoryRange"
+    ).catch((err) => {
+      console.warn("[API] fetchVehicleHistoryRange failed:", err?.message || err);
+      return [];
+    });
   }
 
   // Delta version of fetchVehicleHistory - see fetchHistoryDelta() above,
@@ -124,9 +165,81 @@ const API = (() => {
   async function fetchVehicleHistoryDelta(imei, sinceIso) {
     let q = AUTH.client.from("vehicle_positions").select("*").eq("imei_no", imei).order("polled_at");
     if (sinceIso) q = q.gt("polled_at", sinceIso);
-    const { data, error } = await q;
-    if (error) throw error;
-    return data;
+    return withTimeout(
+      q.then(({ data, error }) => {
+        if (error) throw error;
+        return data || [];
+      }),
+      8000,
+      "fetchVehicleHistoryDelta"
+    ).catch((err) => {
+      console.warn("[API] fetchVehicleHistoryDelta failed:", err?.message || err);
+      return [];
+    });
+  }
+
+  function getDaysInRange(startDate, endDate) {
+    if (!startDate || !endDate) return [];
+    const days = [];
+    let curr = new Date(`${startDate}T00:00:00Z`);
+    const end = new Date(`${endDate}T00:00:00Z`);
+    while (curr <= end && days.length <= 60) {
+      days.push(curr.toISOString().slice(0, 10));
+      curr.setUTCDate(curr.getUTCDate() + 1);
+    }
+    return days;
+  }
+
+  // Executes an RPC call with timeout protection. If PostgreSQL throws error 57014
+  // (statement timeout) or a query times out, and the call spans multiple days,
+  // automatically breaks the query into 1-day slices to avoid database timeouts.
+  async function callRpcWithDailyFallback(fnName, baseParams, startDate, endDate, startKey = "p_start_date", endKey = "p_end_date") {
+    const isMultiDay = startDate && endDate && startDate !== endDate;
+    const callSingle = (s, e) => {
+      const params = { ...baseParams };
+      if (s !== undefined) params[startKey] = s;
+      if (e !== undefined) params[endKey] = e;
+      return withTimeout(
+        AUTH.client.rpc(fnName, params).then(({ data, error }) => {
+          if (error) throw error;
+          return data || [];
+        }),
+        10000,
+        fnName
+      );
+    };
+
+    try {
+      return await callSingle(startDate, endDate);
+    } catch (err) {
+      const isTimeout =
+        err?.code === "57014" ||
+        /statement timeout|timed out|57014/i.test(err?.message || "");
+
+      if (isTimeout && isMultiDay) {
+        console.warn(`[API] ${fnName} timed out for range ${startDate}..${endDate}. Falling back to daily chunked queries...`);
+        const days = getDaysInRange(startDate, endDate);
+        const results = [];
+        const BATCH_SIZE = 3;
+        for (let i = 0; i < days.length; i += BATCH_SIZE) {
+          const batch = days.slice(i, i + BATCH_SIZE);
+          const batchResults = await Promise.allSettled(
+            batch.map((day) => callSingle(day, day))
+          );
+          for (const res of batchResults) {
+            if (res.status === "fulfilled" && Array.isArray(res.value)) {
+              results.push(...res.value);
+            } else if (res.status === "rejected") {
+              console.warn(`[API] ${fnName} failed for day chunk:`, res.reason);
+            }
+          }
+        }
+        return results;
+      }
+
+      console.warn(`[API] ${fnName} failed:`, err?.message || err);
+      return [];
+    }
   }
 
   // Multi-day, per-vehicle-per-day analytics (moving/idle/parked/maintenance
@@ -136,9 +249,7 @@ const API = (() => {
   // passed through from CONFIG on every call, NOT duplicated in SQL -
   // config.js stays the one place that says where the yard/garage are.
   async function fetchDailyMetrics({ startDate, endDate, imei = null }) {
-    const { data, error } = await AUTH.client.rpc("vehicle_day_metrics", {
-      p_start_date: startDate, // "YYYY-MM-DD", Kathmandu calendar date, inclusive
-      p_end_date: endDate, // inclusive
+    const params = {
       p_park_lat: CONFIG.PARK_CENTER.lat,
       p_park_lon: CONFIG.PARK_CENTER.lon,
       p_park_radius_m: CONFIG.PARK_RADIUS_M,
@@ -150,9 +261,8 @@ const API = (() => {
       p_overnight_end_hour: CONFIG.OVERNIGHT_END_HOUR,
       p_max_gap_minutes: CONFIG.MAX_GAP_MINUTES,
       p_tz: CONFIG.TIMEZONE,
-    });
-    if (error) throw error;
-    return data;
+    };
+    return callRpcWithDailyFallback("vehicle_day_metrics", params, startDate, endDate, "p_start_date", "p_end_date");
   }
 
   // Discrete maintenance-visit episodes (start/end/duration), grouping
@@ -166,17 +276,14 @@ const API = (() => {
   // for no upper bound - a visit is included if it STARTED on or before
   // endDate, even if still ongoing past it).
   async function fetchMaintenanceVisits({ imei = null, startDate = null, endDate = null } = {}) {
-    const { data, error } = await AUTH.client.rpc("vehicle_maintenance_visits", {
+    const params = {
       p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
       p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
       p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
       p_imei: imei,
-      p_since: startDate,
-      p_until: endDate,
       p_tz: CONFIG.TIMEZONE,
-    });
-    if (error) throw error;
-    return data;
+    };
+    return callRpcWithDailyFallback("vehicle_maintenance_visits", params, startDate, endDate, "p_since", "p_until");
   }
 
   // GPS-jump / frozen-while-moving anomalies - see schema.sql's
@@ -186,16 +293,13 @@ const API = (() => {
   // building block for "does the GPS agree with what's being reported"
   // fraud/tamper signals, independent of any external rides feed.
   async function fetchAnomalies({ startDate, endDate, imei = null }) {
-    const { data, error } = await AUTH.client.rpc("vehicle_gps_anomalies", {
-      p_start_date: startDate,
-      p_end_date: endDate,
+    const params = {
       p_imei: imei,
       p_max_plausible_kmh: CONFIG.MAX_PLAUSIBLE_KMH,
       p_stuck_minutes: CONFIG.STUCK_MINUTES,
       p_tz: CONFIG.TIMEZONE,
-    });
-    if (error) throw error;
-    return data;
+    };
+    return callRpcWithDailyFallback("vehicle_gps_anomalies", params, startDate, endDate, "p_start_date", "p_end_date");
   }
 
   // Vehicle <-> driver phone mapping - full history (current + past), not
@@ -210,9 +314,17 @@ const API = (() => {
   async function fetchVehicleDriverMappings(imei = null) {
     let q = AUTH.client.from("vehicle_driver_mapping").select("*");
     if (imei) q = q.eq("imei_no", imei);
-    const { data, error } = await q.order("imei_no").order("valid_from", { ascending: false });
-    if (error) throw error;
-    return data;
+    return withTimeout(
+      q.order("imei_no").order("valid_from", { ascending: false }).then(({ data, error }) => {
+        if (error) throw error;
+        return data || [];
+      }),
+      8000,
+      "fetchVehicleDriverMappings"
+    ).catch((err) => {
+      console.warn("[API] fetchVehicleDriverMappings failed:", err?.message || err);
+      return [];
+    });
   }
 
   // imei_no -> current mapping row (valid_to is null), from an already-
@@ -221,7 +333,7 @@ const API = (() => {
   // tooltips) so the valid_to===null filter lives in exactly one place.
   function currentDriverByImei(mappings) {
     const map = new Map();
-    for (const m of mappings) {
+    for (const m of (mappings || [])) {
       if (m.valid_to === null) map.set(m.imei_no, m);
     }
     return map;
@@ -254,9 +366,7 @@ const API = (() => {
   // params as fetchDailyMetrics(), so the two compose (join client-side on
   // imei_no + local_date) without re-fetching anything.
   async function fetchRideMatchDailyMetrics({ startDate, endDate, imei = null }) {
-    const { data, error } = await AUTH.client.rpc("vehicle_ride_match_day_metrics", {
-      p_start_date: startDate,
-      p_end_date: endDate,
+    const params = {
       p_park_lat: CONFIG.PARK_CENTER.lat,
       p_park_lon: CONFIG.PARK_CENTER.lon,
       p_park_radius_m: CONFIG.PARK_RADIUS_M,
@@ -268,18 +378,15 @@ const API = (() => {
       p_ride_tolerance_minutes: CONFIG.RIDE_MATCH_TOLERANCE_MINUTES,
       p_pending_grace_minutes: CONFIG.RIDE_MATCH_PENDING_GRACE_MINUTES,
       p_tz: CONFIG.TIMEZONE,
-    });
-    if (error) throw error;
-    return data;
+    };
+    return callRpcWithDailyFallback("vehicle_ride_match_day_metrics", params, startDate, endDate, "p_start_date", "p_end_date");
   }
 
   // On-demand, single-vehicle segment drill-down - see schema.sql's
   // vehicle_ride_segments(). Requires imei (no "all vehicles" mode),
   // mirrors analytics.js's deep-dive report pattern - not auto-loaded.
   async function fetchVehicleRideSegments({ imei, startDate, endDate }) {
-    const { data, error } = await AUTH.client.rpc("vehicle_ride_segments", {
-      p_start_date: startDate,
-      p_end_date: endDate,
+    const params = {
       p_park_lat: CONFIG.PARK_CENTER.lat,
       p_park_lon: CONFIG.PARK_CENTER.lon,
       p_park_radius_m: CONFIG.PARK_RADIUS_M,
@@ -291,9 +398,8 @@ const API = (() => {
       p_ride_tolerance_minutes: CONFIG.RIDE_MATCH_TOLERANCE_MINUTES,
       p_pending_grace_minutes: CONFIG.RIDE_MATCH_PENDING_GRACE_MINUTES,
       p_tz: CONFIG.TIMEZONE,
-    });
-    if (error) throw error;
-    return data;
+    };
+    return callRpcWithDailyFallback("vehicle_ride_segments", params, startDate, endDate, "p_start_date", "p_end_date");
   }
 
   // Restricted read into the mapped fleet's Yango ride history - name/
@@ -303,9 +409,17 @@ const API = (() => {
     let q = AUTH.client.from("fleet_driver_orders").select("*").eq("phone", phone);
     if (startDate) q = q.gte("booked_at", `${startDate}T00:00:00`);
     if (endDate) q = q.lte("ended_at", `${endDate}T23:59:59`);
-    const { data, error } = await q.order("booked_at", { ascending: false });
-    if (error) throw error;
-    return data;
+    return withTimeout(
+      q.order("booked_at", { ascending: false }).then(({ data, error }) => {
+        if (error) throw error;
+        return data || [];
+      }),
+      8000,
+      "fetchDriverRides"
+    ).catch((err) => {
+      console.warn("[API] fetchDriverRides failed:", err?.message || err);
+      return [];
+    });
   }
 
   // Per-vehicle-per-day gross Yango revenue via the mapped driver - see
@@ -314,14 +428,11 @@ const API = (() => {
   // tooltips). Same startDate/endDate/imei shape as fetchDailyMetrics()
   // so the two join client-side on imei_no + local_date.
   async function fetchVehicleRevenueDailyMetrics({ startDate, endDate, imei = null }) {
-    const { data, error } = await AUTH.client.rpc("vehicle_revenue_day_metrics", {
-      p_start_date: startDate,
-      p_end_date: endDate,
+    const params = {
       p_imei: imei,
       p_tz: CONFIG.TIMEZONE,
-    });
-    if (error) throw error;
-    return data;
+    };
+    return callRpcWithDailyFallback("vehicle_revenue_day_metrics", params, startDate, endDate, "p_start_date", "p_end_date");
   }
 
   // classify()'s 4 non-offline branches, WITHOUT the "is this reading old
