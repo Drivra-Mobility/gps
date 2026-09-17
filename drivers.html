@@ -37,6 +37,16 @@
           <strong>Review suggestion</strong> — check it before saving, it's a starting point from
           matching plate numbers, not a confirmed assignment.
         </p>
+        <p class="card-sub">
+          <strong>Why this still needs a human, not just a plate match:</strong> a suggestion is
+          only as good as the GPS device's own reported plate, which is entered by hand in the
+          tracker vendor's system and can be wrong or stale — the "IMEI"/"Last heard" columns exist
+          because the same plate sometimes appears on two different trackers (an old unit that was
+          swapped out but never removed still shows the same plate label, frozen at its last
+          reading). Saving here also opens a new dated record rather than overwriting the old one,
+          which a plate match alone can't do — misuse detection needs to know who was actually
+          driving on a given past date, not just who matches right now.
+        </p>
       </header>
       <div class="table-wrap">
         <table id="mapping-table">
@@ -44,6 +54,8 @@
           <thead>
             <tr>
               <th scope="col">Vehicle</th>
+              <th scope="col">IMEI</th>
+              <th scope="col">Last heard</th>
               <th scope="col">Driver</th>
               <th scope="col">Phone</th>
               <th scope="col">Mapped since</th>
@@ -52,7 +64,7 @@
           </thead>
           <tbody id="mapping-tbody">
             <tr>
-              <td colspan="5" class="empty">Loading…</td>
+              <td colspan="7" class="empty">Loading…</td>
             </tr>
           </tbody>
         </table>

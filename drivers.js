@@ -24,6 +24,18 @@
     });
   }
 
+  // Mirrors app.js's fmtAge() - same "Xm/Xh/Xd ago" convention as the main
+  // fleet table, paired with API.ageSeconds(device_datetime). Duplicated
+  // rather than imported, same reasoning as normalisePhone() above: this
+  // page has zero dependency on any other page's JS by design.
+  function fmtAge(sec) {
+    if (sec == null) return "never";
+    if (sec < 60) return "just now";
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ${Math.floor((sec % 3600) / 60)}m ago`;
+    return `${Math.floor(sec / 86400)}d ago`;
+  }
+
   // Mirrors yapigo's app/core/security.py::normalise_phone() - MUST match,
   // or the join in vehicle_ride_match_day_metrics silently matches
   // nothing. gps_dashboard has zero other dependency on yapigo's codebase
@@ -77,7 +89,7 @@
     const tbody = document.getElementById("mapping-tbody");
     tbody.innerHTML = "";
     if (!latestRows.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty">No vehicles reporting.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">No vehicles reporting.</td></tr>';
       return;
     }
     const current = API.currentDriverByImei(mappings);
@@ -90,13 +102,17 @@
       const suggestion = suggestions.get(imei);
 
       if (editingImei === imei) {
-        tbody.appendChild(buildEditingRow(imei, label, mapping, suggestion));
+        tbody.appendChild(buildEditingRow(imei, label, mapping, suggestion, row));
         continue;
       }
 
       const tr = document.createElement("tr");
       const vehTd = document.createElement("td");
       vehTd.textContent = label;
+      const imeiTd = document.createElement("td");
+      imeiTd.textContent = imei;
+      const lastHeardTd = document.createElement("td");
+      lastHeardTd.textContent = fmtAge(API.ageSeconds(row.device_datetime));
       const nameTd = document.createElement("td");
       const phoneTd = document.createElement("td");
       if (mapping) {
@@ -145,7 +161,7 @@
         });
         actionsTd.appendChild(histBtn);
       }
-      tr.append(vehTd, nameTd, phoneTd, sinceTd, actionsTd);
+      tr.append(vehTd, imeiTd, lastHeardTd, nameTd, phoneTd, sinceTd, actionsTd);
       tbody.appendChild(tr);
 
       if (expandedHistoryImei === imei && history.length > 1) {
@@ -157,7 +173,7 @@
   function buildHistoryRow(history) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 5;
+    td.colSpan = 7;
     const table = document.createElement("table");
     table.className = "table-nested";
     const tbody = document.createElement("tbody");
@@ -176,12 +192,16 @@
     return tr;
   }
 
-  function buildEditingRow(imei, label, mapping, suggestion) {
+  function buildEditingRow(imei, label, mapping, suggestion, row) {
     const tr = document.createElement("tr");
     tr.className = "mapping-row-editing";
 
     const vehTd = document.createElement("td");
     vehTd.textContent = label;
+    const imeiTd = document.createElement("td");
+    imeiTd.textContent = imei;
+    const lastHeardTd = document.createElement("td");
+    lastHeardTd.textContent = fmtAge(API.ageSeconds(row?.device_datetime));
 
     // A suggestion only ever pre-fills an UNMAPPED vehicle's form -- once
     // `mapping` exists, editing it is a real reassignment and must start
@@ -268,7 +288,7 @@
       actionsTd.appendChild(unassignBtn);
     }
 
-    tr.append(vehTd, nameTd, phoneTd, sinceTd, actionsTd);
+    tr.append(vehTd, imeiTd, lastHeardTd, nameTd, phoneTd, sinceTd, actionsTd);
     return tr;
   }
 
