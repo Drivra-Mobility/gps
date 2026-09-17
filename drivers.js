@@ -7,6 +7,7 @@
 
   let latestRows = []; // from fetchLatest() - the vehicle roster
   let mappings = []; // full history, all vehicles
+  let suggestions = new Map(); // imei_no -> suggest_vehicle_driver_matches() row, unmapped vehicles only
   let editingImei = null; // which mapping row is currently being edited, if any
   let expandedHistoryImei = null; // which vehicle's history is expanded, if any
   let loading = false;
@@ -60,9 +61,14 @@
   }
 
   async function loadMappings() {
-    const [latest, mappingRows] = await Promise.all([API.fetchLatest(), API.fetchVehicleDriverMappings()]);
+    const [latest, mappingRows, suggestionRows] = await Promise.all([
+      API.fetchLatest(),
+      API.fetchVehicleDriverMappings(),
+      API.suggestVehicleDriverMatches(),
+    ]);
     latestRows = latest;
     mappings = mappingRows;
+    suggestions = new Map(suggestionRows.map((s) => [s.imei_no, s]));
   }
 
   // ---- mapping table --------------------------------------------------
@@ -81,8 +87,10 @@
       const label = row.vehicle_no || imei;
       const mapping = current.get(imei);
 
+      const suggestion = suggestions.get(imei);
+
       if (editingImei === imei) {
-        tbody.appendChild(buildEditingRow(imei, label, mapping));
+        tbody.appendChild(buildEditingRow(imei, label, mapping, suggestion));
         continue;
       }
 
@@ -90,16 +98,36 @@
       const vehTd = document.createElement("td");
       vehTd.textContent = label;
       const nameTd = document.createElement("td");
-      nameTd.textContent = mapping ? mapping.driver_name || "—" : "—";
       const phoneTd = document.createElement("td");
-      phoneTd.textContent = mapping ? mapping.driver_phone : "—";
+      if (mapping) {
+        nameTd.textContent = mapping.driver_name || "—";
+        phoneTd.textContent = mapping.driver_phone;
+      } else if (suggestion) {
+        // Plate-matched against Yango's roster, not yet confirmed -- see
+        // suggest_vehicle_driver_matches() in schema.sql. Shown as a hint,
+        // not filled into the table like a real mapping, since nobody has
+        // clicked Save yet.
+        const suggestedName =
+          [suggestion.suggested_first_name, suggestion.suggested_last_name].filter(Boolean).join(" ") || "—";
+        const nameHint = document.createElement("p");
+        nameHint.className = "hint";
+        nameHint.textContent = `Suggested: ${suggestedName}`;
+        nameTd.appendChild(nameHint);
+        const phoneHint = document.createElement("p");
+        phoneHint.className = "hint";
+        phoneHint.textContent = suggestion.suggested_driver_phone;
+        phoneTd.appendChild(phoneHint);
+      } else {
+        nameTd.textContent = "—";
+        phoneTd.textContent = "—";
+      }
       const sinceTd = document.createElement("td");
       sinceTd.textContent = mapping ? fmtDate(mapping.valid_from) : "—";
       const actionsTd = document.createElement("td");
       const editBtn = document.createElement("button");
       editBtn.className = "btn btn-quiet";
       editBtn.type = "button";
-      editBtn.textContent = mapping ? "Edit" : "Assign";
+      editBtn.textContent = mapping ? "Edit" : suggestion ? "Review suggestion" : "Assign";
       editBtn.addEventListener("click", () => {
         editingImei = imei;
         renderMappingTable();
@@ -148,29 +176,47 @@
     return tr;
   }
 
-  function buildEditingRow(imei, label, mapping) {
+  function buildEditingRow(imei, label, mapping, suggestion) {
     const tr = document.createElement("tr");
     tr.className = "mapping-row-editing";
 
     const vehTd = document.createElement("td");
     vehTd.textContent = label;
 
+    // A suggestion only ever pre-fills an UNMAPPED vehicle's form -- once
+    // `mapping` exists, editing it is a real reassignment and must start
+    // from what's actually saved, never from a plate-match guess.
+    const prefillName = mapping
+      ? mapping.driver_name || ""
+      : suggestion
+        ? [suggestion.suggested_first_name, suggestion.suggested_last_name].filter(Boolean).join(" ")
+        : "";
+    const prefillPhone = mapping ? mapping.driver_phone : suggestion ? suggestion.suggested_driver_phone : "";
+
     const nameTd = document.createElement("td");
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.placeholder = "Driver name";
-    nameInput.value = mapping ? mapping.driver_name || "" : "";
+    nameInput.value = prefillName;
     nameTd.appendChild(nameInput);
 
     const phoneTd = document.createElement("td");
     const phoneInput = document.createElement("input");
     phoneInput.type = "tel";
     phoneInput.placeholder = "+977XXXXXXXXXX";
-    phoneInput.value = mapping ? mapping.driver_phone : "";
+    phoneInput.value = prefillPhone;
     const phoneError = document.createElement("p");
     phoneError.className = "field-error";
     phoneError.hidden = true;
     phoneTd.append(phoneInput, phoneError);
+    if (!mapping && suggestion) {
+      const suggestHint = document.createElement("p");
+      suggestHint.className = "hint";
+      suggestHint.textContent = suggestion.already_mapped_elsewhere
+        ? `Plate matches this driver's Yango vehicle (${suggestion.suggested_vehicle_number}), but they're already assigned to another vehicle here — check before saving.`
+        : `Pre-filled: plate matches this driver's Yango vehicle (${suggestion.suggested_vehicle_number}). Verify before saving.`;
+      phoneTd.appendChild(suggestHint);
+    }
 
     phoneInput.addEventListener("blur", async () => {
       const normalised = normalisePhone(phoneInput.value);

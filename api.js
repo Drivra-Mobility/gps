@@ -249,6 +249,18 @@ const API = (() => {
     return data[0] || null;
   }
 
+  // Candidate driver for each UNMAPPED vehicle, found by matching Yango's
+  // drivers.vehicle_number against this vehicle's GPS-reported plate (see
+  // schema.sql's suggest_vehicle_driver_matches()) - a starting point for the
+  // "Assign" form, not an auto-write. Omit imei for the whole-fleet list
+  // (drivers.js loads this once alongside the mapping table); pass it to
+  // refresh just one vehicle's suggestion after a save.
+  async function suggestVehicleDriverMatches(imei = null) {
+    const { data, error } = await AUTH.client.rpc("suggest_vehicle_driver_matches", { p_imei: imei });
+    if (error) throw error;
+    return data;
+  }
+
   // Per-vehicle-per-day ride-corroboration rollup - see schema.sql's
   // vehicle_ride_match_day_metrics(). Same CONFIG-sourced geofence/tz/gap
   // params as fetchDailyMetrics(), so the two compose (join client-side on
@@ -514,6 +526,7 @@ const API = (() => {
     currentDriverByImei,
     setVehicleDriver,
     lookupDriverByPhone,
+    suggestVehicleDriverMatches,
     fetchRideMatchDailyMetrics,
     fetchVehicleRideSegments,
     fetchDriverRides,
