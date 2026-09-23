@@ -8,8 +8,10 @@
   let latestRows = []; // from fetchLatest() - the vehicle roster
   let mappings = []; // full history, all vehicles
   let suggestions = new Map(); // imei_no -> suggest_vehicle_driver_matches() row, unmapped vehicles only
+  let attributesByImei = new Map(); // imei_no -> vehicle_attributes row, if registered
   let editingImei = null; // which mapping row is currently being edited, if any
   let expandedHistoryImei = null; // which vehicle's history is expanded, if any
+  let editingAttrsImei = null; // which vehicle-attributes row is currently being edited, if any
   let loading = false;
 
   // ---- formatting -------------------------------------------------------
@@ -73,14 +75,16 @@
   }
 
   async function loadMappings() {
-    const [latest, mappingRows, suggestionRows] = await Promise.all([
+    const [latest, mappingRows, suggestionRows, attributeRows] = await Promise.all([
       API.fetchLatest(),
       API.fetchVehicleDriverMappings(),
       API.suggestVehicleDriverMatches(),
+      API.fetchVehicleAttributes(),
     ]);
     latestRows = latest;
     mappings = mappingRows;
     suggestions = new Map(suggestionRows.map((s) => [s.imei_no, s]));
+    attributesByImei = API.vehicleAttributesByImei(attributeRows);
   }
 
   // ---- mapping table --------------------------------------------------
@@ -313,10 +317,158 @@
       editingImei = null;
       await loadMappings();
       renderMappingTable();
+      renderAttributesTable();
     } catch (err) {
       console.error(err);
       phoneError.textContent = err.message || "Save failed.";
       phoneError.hidden = false;
+      triggerBtn.disabled = false;
+      triggerBtn.textContent = original;
+    } finally {
+      LOADING.stop();
+    }
+  }
+
+  // ---- vehicle type & fuel table ----------------------------------------
+  // Simpler than the mapping table above: one row per vehicle, no history
+  // and no suggestion pre-fill (neither GPS provider reports fuel type, so
+  // there's nothing to suggest it from) - just a plain upsert.
+
+  const FUEL_TYPES = ["electric", "petrol"];
+
+  function renderAttributesTable() {
+    const tbody = document.getElementById("attributes-tbody");
+    tbody.innerHTML = "";
+    if (!latestRows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">No vehicles reporting.</td></tr>';
+      return;
+    }
+    for (const row of latestRows) {
+      const imei = row.imei_no;
+      const label = row.vehicle_no || imei;
+      const attrs = attributesByImei.get(imei);
+
+      if (editingAttrsImei === imei) {
+        tbody.appendChild(buildAttributesEditingRow(imei, label, row, attrs));
+        continue;
+      }
+
+      const tr = document.createElement("tr");
+      const vehTd = document.createElement("td");
+      vehTd.textContent = label;
+      const imeiTd = document.createElement("td");
+      imeiTd.textContent = imei;
+      const typeTd = document.createElement("td");
+      typeTd.textContent = (attrs && attrs.vehicle_type) || "—";
+      const fuelTd = document.createElement("td");
+      fuelTd.textContent = (attrs && attrs.fuel_type) || "—";
+      const noteTd = document.createElement("td");
+      noteTd.textContent = (attrs && attrs.note) || "—";
+      const actionsTd = document.createElement("td");
+      const editBtn = document.createElement("button");
+      editBtn.className = "btn btn-quiet";
+      editBtn.type = "button";
+      editBtn.textContent = attrs ? "Edit" : "Register";
+      editBtn.addEventListener("click", () => {
+        editingAttrsImei = imei;
+        renderAttributesTable();
+      });
+      actionsTd.appendChild(editBtn);
+      tr.append(vehTd, imeiTd, typeTd, fuelTd, noteTd, actionsTd);
+      tbody.appendChild(tr);
+    }
+  }
+
+  function buildAttributesEditingRow(imei, label, row, attrs) {
+    const tr = document.createElement("tr");
+    tr.className = "mapping-row-editing";
+
+    const vehTd = document.createElement("td");
+    vehTd.textContent = label;
+    const imeiTd = document.createElement("td");
+    imeiTd.textContent = imei;
+
+    const typeTd = document.createElement("td");
+    const typeInput = document.createElement("input");
+    typeInput.type = "text";
+    typeInput.placeholder = "e.g. scooter, bike";
+    typeInput.value = (attrs && attrs.vehicle_type) || "";
+    typeTd.appendChild(typeInput);
+
+    const fuelTd = document.createElement("td");
+    const fuelSelect = document.createElement("select");
+    const blankOption = document.createElement("option");
+    blankOption.value = "";
+    blankOption.textContent = "Select…";
+    fuelSelect.appendChild(blankOption);
+    for (const ft of FUEL_TYPES) {
+      const opt = document.createElement("option");
+      opt.value = ft;
+      opt.textContent = ft[0].toUpperCase() + ft.slice(1);
+      fuelSelect.appendChild(opt);
+    }
+    fuelSelect.value = (attrs && attrs.fuel_type) || "";
+    const fuelError = document.createElement("p");
+    fuelError.className = "field-error";
+    fuelError.hidden = true;
+    fuelTd.append(fuelSelect, fuelError);
+
+    const noteTd = document.createElement("td");
+    const noteInput = document.createElement("input");
+    noteInput.type = "text";
+    noteInput.placeholder = "Note (optional)";
+    noteInput.value = (attrs && attrs.note) || "";
+    noteTd.appendChild(noteInput);
+
+    const actionsTd = document.createElement("td");
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "btn btn-primary";
+    saveBtn.type = "button";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", () =>
+      saveAttributes(imei, row.vehicle_no || null, typeInput, fuelSelect, noteInput, fuelError, saveBtn)
+    );
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "btn btn-quiet";
+    cancelBtn.type = "button";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", () => {
+      editingAttrsImei = null;
+      renderAttributesTable();
+    });
+    actionsTd.append(saveBtn, cancelBtn);
+
+    tr.append(vehTd, imeiTd, typeTd, fuelTd, noteTd, actionsTd);
+    return tr;
+  }
+
+  async function saveAttributes(imei, vehicleNo, typeInput, fuelSelect, noteInput, fuelError, triggerBtn) {
+    const fuelType = fuelSelect.value;
+    if (!fuelType) {
+      fuelError.textContent = "Fuel type is required.";
+      fuelError.hidden = false;
+      return;
+    }
+    triggerBtn.disabled = true;
+    const original = triggerBtn.textContent;
+    triggerBtn.textContent = "Saving…";
+    LOADING.start();
+    try {
+      await API.upsertVehicleAttributes({
+        imei,
+        vehicleNo,
+        vehicleType: typeInput.value.trim() || null,
+        fuelType,
+        note: noteInput.value.trim() || null,
+      });
+      editingAttrsImei = null;
+      await loadMappings();
+      renderMappingTable();
+      renderAttributesTable();
+    } catch (err) {
+      console.error(err);
+      fuelError.textContent = err.message || "Save failed.";
+      fuelError.hidden = false;
       triggerBtn.disabled = false;
       triggerBtn.textContent = original;
     } finally {
@@ -335,6 +487,7 @@
     try {
       await loadMappings();
       renderMappingTable();
+      renderAttributesTable();
       statusEl.textContent = `Loaded ${new Date().toLocaleTimeString()}`;
       statusEl.classList.remove("is-error");
     } catch (err) {

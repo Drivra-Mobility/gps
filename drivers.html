@@ -71,6 +71,38 @@
       </div>
     </section>
 
+    <section class="card">
+      <header class="card-head">
+        <h2>Vehicle type &amp; fuel</h2>
+        <p class="card-sub">
+          Neither GPS provider reports fuel type — electric vs petrol is registered here, by
+          hand, per vehicle. A vehicle with no row here yet falls back to a rough guess from its
+          name/plate text on the map (see <code>VEHICLE_TYPE_RULES</code> in
+          <code>config.js</code>), with no fuel-type marker at all.
+        </p>
+      </header>
+      <div class="table-wrap">
+        <table id="attributes-table">
+          <caption class="visually-hidden">Vehicle type and fuel registry</caption>
+          <thead>
+            <tr>
+              <th scope="col">Vehicle</th>
+              <th scope="col">IMEI</th>
+              <th scope="col">Type</th>
+              <th scope="col">Fuel</th>
+              <th scope="col">Note</th>
+              <th scope="col"></th>
+            </tr>
+          </thead>
+          <tbody id="attributes-tbody">
+            <tr>
+              <td colspan="6" class="empty">Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
     <footer class="foot">
       <span id="status">—</span>
       <span class="foot-sep">·</span>

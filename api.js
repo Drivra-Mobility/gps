@@ -227,6 +227,56 @@ const API = (() => {
     return map;
   }
 
+  // Vehicle/fuel type registry (public.vehicle_attributes, added alongside
+  // TrackonGPS in trackezz_etl) - manually maintained, so it will lag new
+  // vehicles. Unlike vehicle_driver_mapping there's no history to track
+  // (one row per vehicle, no valid_from/valid_to), so this is a plain
+  // select rather than a "current mapping" split.
+  //
+  // imei is optional - same reasoning as fetchVehicleDriverMappings(): pass
+  // it for a single-vehicle page (vehicle.html), omit it for the whole-fleet
+  // list (index.html's table/map).
+  async function fetchVehicleAttributes(imei = null) {
+    let q = AUTH.client.from("vehicle_attributes").select("*");
+    if (imei) q = q.eq("imei_no", imei);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  }
+
+  // imei_no -> its vehicle_attributes row, from an already-fetched
+  // fetchVehicleAttributes() result. Mirrors currentDriverByImei()'s role
+  // for driver mappings - the lookup shape every page wants.
+  function vehicleAttributesByImei(attributes) {
+    const map = new Map();
+    for (const a of attributes) map.set(a.imei_no, a);
+    return map;
+  }
+
+  // Creates or updates one vehicle's type/fuel registration. A plain
+  // upsert, not an RPC like setVehicleDriver() - there's no history to
+  // preserve here (see fetchVehicleAttributes() above), so there's nothing
+  // an atomic close-then-open would protect against.
+  async function upsertVehicleAttributes({ imei, vehicleNo = null, vehicleType = null, fuelType, note = null }) {
+    const { data, error } = await AUTH.client
+      .from("vehicle_attributes")
+      .upsert(
+        {
+          imei_no: imei,
+          vehicle_no: vehicleNo,
+          vehicle_type: vehicleType,
+          fuel_type: fuelType,
+          note,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "imei_no" }
+      )
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
   // Atomically closes any current mapping for imei and opens a new one (or,
   // if the phone is unchanged, updates driver_name/note in place) - see
   // schema.sql's set_vehicle_driver(). phone null/"" unassigns.
@@ -524,6 +574,9 @@ const API = (() => {
     fetchAnomalies,
     fetchVehicleDriverMappings,
     currentDriverByImei,
+    fetchVehicleAttributes,
+    vehicleAttributesByImei,
+    upsertVehicleAttributes,
     setVehicleDriver,
     lookupDriverByPhone,
     suggestVehicleDriverMatches,

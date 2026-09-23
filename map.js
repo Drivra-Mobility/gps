@@ -77,10 +77,14 @@ const MAP = (() => {
     requestAnimationFrame(tick);
   }
 
-  // Cosmetic-only vehicle-type classification for marker glyphs, driven by
-  // CONFIG.VEHICLE_TYPE_RULES (see config.js for why this can't come from
-  // the data itself). Returns a type string or null if nothing matched.
-  function vehicleTypeOf(row) {
+  // Vehicle-type classification for marker glyphs. attributesRow, if given,
+  // is this vehicle's row from API.vehicleAttributesByImei() (real,
+  // registered vehicle_type) - used whenever present. Falls back to
+  // CONFIG.VEHICLE_TYPE_RULES's regex guess against vehicle_no/vehicle_name
+  // for a vehicle nobody has registered yet (see config.js). Returns a type
+  // string or null if nothing matched either way.
+  function vehicleTypeOf(row, attributesRow) {
+    if (attributesRow && attributesRow.vehicle_type) return attributesRow.vehicle_type;
     const haystack = `${row.vehicle_no || ""} ${row.vehicle_name || ""}`;
     for (const rule of CONFIG.VEHICLE_TYPE_RULES || []) {
       if (rule.pattern.test(haystack)) return rule.type;
@@ -114,7 +118,13 @@ const MAP = (() => {
   // headingDeg: only meaningful for "moving" (arrow shape); ignored otherwise.
   // vehicleType: from vehicleTypeOf() - swaps the plain state shape for a
   // type silhouette (still colored by state) when known and not moving.
-  function iconFor(state, headingDeg, vehicleType) {
+  // fuelType: 'electric'/'petrol'/undefined (this vehicle's
+  // vehicle_attributes.fuel_type, if registered) - drawn as a small corner
+  // badge, not a shape/color swap, so it never competes with the state
+  // color's own meaning (moving/idle/parked/etc). Omitted entirely (no
+  // badge markup at all) when unset, so existing callers that don't pass it
+  // get byte-identical output to before.
+  function iconFor(state, headingDeg, vehicleType, fuelType) {
     const color = cssVar(`--state-${state}`);
     const size = 24;
     let shape;
@@ -139,7 +149,11 @@ const MAP = (() => {
       // offline
       shape = `<circle cx="12" cy="12" r="7" fill="none" stroke="${color}" stroke-width="2" stroke-dasharray="3 2"/>`;
     }
-    const html = `<span class="marker"><svg width="${size}" height="${size}" viewBox="0 0 24 24">${shape}</svg></span>`;
+    const fuelColor = fuelType && CONFIG.FUEL_TYPE_COLORS && CONFIG.FUEL_TYPE_COLORS[fuelType];
+    const badge = fuelColor
+      ? `<circle cx="19" cy="5" r="3.5" fill="${fuelColor}" stroke="white" stroke-width="1"/>`
+      : "";
+    const html = `<span class="marker"><svg width="${size}" height="${size}" viewBox="0 0 24 24">${shape}${badge}</svg></span>`;
     return L.divIcon({ html, className: "", iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
   }
 

@@ -6,6 +6,7 @@
   let latestRows = [];
   let historyRows = [];
   let driverByImei = new Map(); // imei -> current vehicle_driver_mapping row
+  let attributesByImei = new Map(); // imei -> vehicle_attributes row (vehicle_type/fuel_type)
   let grouped = new Map();
   let metrics = new Map(); // imei -> vehicleMetrics()
   let distanceTodayByImei = new Map(); // imei -> distance_km, today (Kathmandu calendar day), moving-only
@@ -107,19 +108,25 @@
     const isFreshDuration = durationRows.length === 0;
     const today = kathmanduToday();
 
-    const [latest, historyDelta, durationDelta, mappings, dayMetricsToday, revenueToday] = await Promise.all([
-      API.fetchLatest(),
-      isFreshWindow ? API.fetchHistorySince(hours) : API.fetchHistoryDelta(lastHistoryMaxPolledAt),
-      // Independent of the display window - see CONFIG.INACTIVE_LOOKBACK_HOURS.
-      isFreshDuration
-        ? API.fetchHistorySince(CONFIG.INACTIVE_LOOKBACK_HOURS)
-        : API.fetchHistoryDelta(lastDurationMaxPolledAt),
-      needsSlowRefresh ? API.fetchVehicleDriverMappings() : Promise.resolve(null),
-      needsSlowRefresh ? API.fetchDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
-      // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
-      // above, ~15min behind via fleet.*_cache) - always fully live.
-      needsSlowRefresh ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
-    ]);
+    const [latest, historyDelta, durationDelta, mappings, attributes, dayMetricsToday, revenueToday] =
+      await Promise.all([
+        API.fetchLatest(),
+        isFreshWindow ? API.fetchHistorySince(hours) : API.fetchHistoryDelta(lastHistoryMaxPolledAt),
+        // Independent of the display window - see CONFIG.INACTIVE_LOOKBACK_HOURS.
+        isFreshDuration
+          ? API.fetchHistorySince(CONFIG.INACTIVE_LOOKBACK_HOURS)
+          : API.fetchHistoryDelta(lastDurationMaxPolledAt),
+        needsSlowRefresh ? API.fetchVehicleDriverMappings() : Promise.resolve(null),
+        // Manually-maintained, same infrequent-change cadence as driver
+        // mappings - no reason to refresh it any faster.
+        needsSlowRefresh ? API.fetchVehicleAttributes() : Promise.resolve(null),
+        needsSlowRefresh ? API.fetchDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
+        // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
+        // above, ~15min behind via fleet.*_cache) - always fully live.
+        needsSlowRefresh
+          ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today })
+          : Promise.resolve(null),
+      ]);
 
     latestRows = latest;
     historyRows = isFreshWindow
@@ -144,6 +151,7 @@
 
     if (needsSlowRefresh) {
       driverByImei = API.currentDriverByImei(mappings);
+      attributesByImei = API.vehicleAttributesByImei(attributes);
       distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
       revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
       lastSlowRefreshAt = Date.now();
@@ -330,8 +338,14 @@
     for (const row of latestRows) {
       seen.add(row.imei_no);
       const state = rowState(row);
-      const vehicleType = MAP.vehicleTypeOf(row);
-      const icon = MAP.iconFor(state, state === "moving" ? headingOf(row) : null, vehicleType);
+      const attrs = attributesByImei.get(row.imei_no);
+      const vehicleType = MAP.vehicleTypeOf(row, attrs);
+      const icon = MAP.iconFor(
+        state,
+        state === "moving" ? headingOf(row) : null,
+        vehicleType,
+        attrs && attrs.fuel_type
+      );
       if (row.latitude == null || row.longitude == null) continue;
 
       const prevState = prevStates.get(row.imei_no);
@@ -410,6 +424,7 @@
     return latestRows.map((row) => {
       const state = rowState(row);
       const m = metrics.get(row.imei_no) || { distanceKm: 0 };
+      const attrs = attributesByImei.get(row.imei_no);
       return {
         imei: row.imei_no,
         vehicle_no: row.vehicle_no || row.imei_no,
@@ -421,6 +436,13 @@
         cashToday: revenueTodayByImei.get(row.imei_no) ?? null,
         ageSec: API.ageSeconds(row.device_datetime),
         battery: Number((row.raw || {}).battery_percentage),
+        // Same type source (attrs first, regex-guess fallback) the map
+        // marker uses - see MAP.vehicleTypeOf(). "—" (not null) so this
+        // column sorts as text like `driver` above, rather than needing
+        // its own null-handling branch in sortRows().
+        vehicleType: MAP.vehicleTypeOf(row, attrs) || "—",
+        fuelType: (attrs && attrs.fuel_type) || "—",
+        provider: row.provider || "—",
       };
     });
   }
@@ -448,7 +470,7 @@
     const rows = sortRows(tableRows());
     tbody.innerHTML = "";
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty">No vehicles reporting.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="empty">No vehicles reporting.</td></tr>';
       return;
     }
     for (const r of rows) {
@@ -462,6 +484,12 @@
 
       const driverTd = document.createElement("td");
       driverTd.textContent = r.driver;
+
+      const typeTd = document.createElement("td");
+      typeTd.textContent = r.fuelType !== "—" ? `${r.vehicleType} · ${r.fuelType}` : r.vehicleType;
+
+      const providerTd = document.createElement("td");
+      providerTd.textContent = r.provider;
 
       const stateTd = document.createElement("td");
       const stateSpan = document.createElement("span");
@@ -498,7 +526,19 @@
         batteryTd.textContent = "—";
       }
 
-      tr.append(vehTd, driverTd, stateTd, speedTd, distTd, distTodayTd, cashTodayTd, ageTd, batteryTd);
+      tr.append(
+        vehTd,
+        driverTd,
+        typeTd,
+        providerTd,
+        stateTd,
+        speedTd,
+        distTd,
+        distTodayTd,
+        cashTodayTd,
+        ageTd,
+        batteryTd
+      );
       tbody.appendChild(tr);
     }
   }

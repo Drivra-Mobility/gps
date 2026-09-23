@@ -68,8 +68,11 @@ const CONFIG = {
   // frequently rate-limited slower than that (see trackezz-supabase-etl's
   // lambda_function.py) - polling this dashboard faster than the
   // underlying data can change just burns reads for no fresher content.
-  // Also now pauses entirely while the tab is hidden - see loading.js's
-  // pollWhileVisible().
+  // Still true now that the same lambda also polls TrackonGPS (a second,
+  // independent GPS hardware provider added 2026-09-23) each cycle - both
+  // providers are pulled within the same once-a-minute invocation, so the
+  // underlying data still can't change faster than that. Also now pauses
+  // entirely while the tab is hidden - see loading.js's pollWhileVisible().
   REFRESH_MS: 5 * 60_000,
 
   // How often app.js/vehicle.js re-fetch driver mappings and "today"'s
@@ -132,9 +135,12 @@ const CONFIG = {
   MAINTENANCE_ONGOING_LOOKBACK_DAYS: 30,
 
   // Vehicle-type icon classification for the map (cosmetic only - purely
-  // for choosing a marker glyph). There is no vehicle-type column in
-  // vehicle_positions, so this matches vehicle_no/vehicle_name text against
-  // regexes maintained here. GUESSES below - confirm against your real
+  // for choosing a marker glyph). Used as a FALLBACK only, for a vehicle
+  // with no row yet in public.vehicle_attributes (see api.js's
+  // fetchVehicleAttributes()/vehicleAttributesByImei() - the real,
+  // registered vehicle_type wins whenever one exists; this regex guess
+  // against vehicle_no/vehicle_name only covers the gap until someone
+  // registers it). GUESSES below - confirm against your real
   // vehicle_no/vehicle_name values (sign in and look at the table) and edit
   // the patterns to match. First matching rule wins; no match falls back to
   // the generic marker.
@@ -142,6 +148,17 @@ const CONFIG = {
     { type: "bike", pattern: /\b(bike|moto|scooter)\b/i },
     { type: "truck", pattern: /\b(truck|lorry)\b/i },
   ],
+
+  // Fuel-type marker tint (map.js's iconFor()) - an ORTHOGONAL cue to
+  // VEHICLE_TYPE_RULES above, not a replacement: vehicle_type still picks
+  // the marker's shape (bike/truck/generic), fuel_type only tints it.
+  // Sourced from public.vehicle_attributes; a vehicle with no fuel_type
+  // registered yet gets no tint (falls through to the shape's normal
+  // per-state color).
+  FUEL_TYPE_COLORS: {
+    electric: "#22c55e",
+    petrol: "#f59e0b",
+  },
 
   // GPS anomaly detection (analytics page). No fraud/tamper signal here
   // needs an external data source - both are internal consistency checks on

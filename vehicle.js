@@ -9,6 +9,7 @@
 
   let rows = [];
   let currentDriver = null; // this vehicle's current vehicle_driver_mapping row, if any
+  let vehicleAttrs = null; // this vehicle's vehicle_attributes row (vehicle_type/fuel_type), if any
   let currentWindowHours = null;
   let lastHistoryMaxPolledAt = null;
   let lastSlowRefreshAt = 0; // driver mapping refreshes on CONFIG.SLOW_REFRESH_MS, not every poll - see app.js
@@ -63,13 +64,14 @@
     const needsSlowRefresh = isFreshWindow || Date.now() - lastSlowRefreshAt >= CONFIG.SLOW_REFRESH_MS;
     const isFreshDuration = durationRows.length === 0;
 
-    const [historyDelta, durationDelta, mappings] = await Promise.all([
+    const [historyDelta, durationDelta, mappings, attributes] = await Promise.all([
       isFreshWindow ? API.fetchVehicleHistory(imei, hours) : API.fetchVehicleHistoryDelta(imei, lastHistoryMaxPolledAt),
       // Independent of the display window - see CONFIG.INACTIVE_LOOKBACK_HOURS.
       isFreshDuration
         ? API.fetchVehicleHistory(imei, CONFIG.INACTIVE_LOOKBACK_HOURS)
         : API.fetchVehicleHistoryDelta(imei, lastDurationMaxPolledAt),
       needsSlowRefresh ? API.fetchVehicleDriverMappings(imei) : Promise.resolve(null),
+      needsSlowRefresh ? API.fetchVehicleAttributes(imei) : Promise.resolve(null),
     ]);
 
     rows = isFreshWindow ? historyDelta : API.mergeHistoryRows(rows, historyDelta, hours);
@@ -85,6 +87,7 @@
 
     if (needsSlowRefresh) {
       currentDriver = API.currentDriverByImei(mappings).get(imei) || null;
+      vehicleAttrs = attributes && attributes[0] ? attributes[0] : null;
       lastSlowRefreshAt = Date.now();
     }
   }
@@ -93,8 +96,12 @@
     document.getElementById("veh-title").textContent = latest.vehicle_no || latest.vehicle_name || imei;
     const bits = [
       currentDriver ? `Driver: ${currentDriver.driver_name || currentDriver.driver_phone}` : "Unmapped - no driver on file",
+      vehicleAttrs && vehicleAttrs.fuel_type
+        ? `${vehicleAttrs.vehicle_type || "vehicle"} · ${vehicleAttrs.fuel_type}`
+        : null,
       latest.device_model,
       `IMEI ${latest.imei_no}`,
+      latest.provider ? `via ${latest.provider}` : null,
     ].filter(Boolean);
     document.getElementById("veh-sub").textContent = bits.join(" · ");
     document.title = `${latest.vehicle_no || imei} — Fleet dashboard`;
@@ -157,8 +164,13 @@
 
     if (latest.latitude == null) return;
     const angle = Number((latest.raw || {}).Angle);
-    const vehicleType = MAP.vehicleTypeOf(latest);
-    const icon = MAP.iconFor(state, state === "moving" && Number.isFinite(angle) ? angle : null, vehicleType);
+    const vehicleType = MAP.vehicleTypeOf(latest, vehicleAttrs);
+    const icon = MAP.iconFor(
+      state,
+      state === "moving" && Number.isFinite(angle) ? angle : null,
+      vehicleType,
+      vehicleAttrs && vehicleAttrs.fuel_type
+    );
     if (!marker) {
       marker = L.marker([latest.latitude, latest.longitude], { icon }).addTo(map);
     } else {
