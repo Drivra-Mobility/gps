@@ -330,9 +330,12 @@
   }
 
   // ---- vehicle type & fuel table ----------------------------------------
-  // Simpler than the mapping table above: one row per vehicle, no history
-  // and no suggestion pre-fill (neither GPS provider reports fuel type, so
-  // there's nothing to suggest it from) - just a plain upsert.
+  // Simpler than the mapping table above: one row per vehicle, no history -
+  // just a plain upsert. vehicle_type gets a pre-fill suggestion from the
+  // GPS provider's own classification (see buildAttributesEditingRow()
+  // below); fuel_type has no such suggestion, since neither GPS provider
+  // reports it (confirmed 2026-09-23 - Trakzee's Fuel field reads empty
+  // for every vehicle in the live fleet).
 
   const FUEL_TYPES = ["electric", "petrol"];
 
@@ -392,8 +395,22 @@
     const typeInput = document.createElement("input");
     typeInput.type = "text";
     typeInput.placeholder = "e.g. scooter, bike";
-    typeInput.value = (attrs && attrs.vehicle_type) || "";
+    // Pre-fill from the GPS provider's own vehicle-type field when nobody
+    // has registered one here yet - same "suggest, don't auto-commit"
+    // pattern as the driver-mapping form above. raw.VehicleType comes from
+    // Trakzee's Vehicletype or TrackonGPS's device category (see
+    // trackezz_etl's transform.py/trackon_transform.py); Trakzee's own
+    // "Default" placeholder and Traccar's "default" are already filtered
+    // out there, so anything that reaches here is a real value.
+    const suggestedType = (row.raw || {}).VehicleType;
+    typeInput.value = (attrs && attrs.vehicle_type) || suggestedType || "";
     typeTd.appendChild(typeInput);
+    if (!attrs && suggestedType) {
+      const typeHint = document.createElement("p");
+      typeHint.className = "hint";
+      typeHint.textContent = `Suggested by the GPS provider: ${suggestedType}. Verify before saving.`;
+      typeTd.appendChild(typeHint);
+    }
 
     const fuelTd = document.createElement("td");
     const fuelSelect = document.createElement("select");

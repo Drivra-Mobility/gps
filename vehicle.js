@@ -212,6 +212,17 @@
     if (latest.satellite_count != null) entries.push(["Satellites", String(latest.satellite_count)]);
     if (raw.Power && raw.Power !== "--") entries.push(["External power state", raw.Power]);
     if (latest.ignition) entries.push(["Ignition", latest.ignition]);
+    // Cumulative distance from the tracker itself, not computed from GPS
+    // polls (so no gaps/drift) - added 2026-09-23 alongside TrackonGPS.
+    // Metres inferred for both providers (Teltonika's standard AVL
+    // parameter for Trakzee, Traccar's documented convention for
+    // TrackonGPS) - see trackezz_etl/src/transform.py for the caveat on
+    // the Trakzee side specifically.
+    const odometer = Number(raw.Odometer);
+    if (Number.isFinite(odometer)) entries.push(["Odometer", `${(odometer / 1000).toFixed(1)} km`]);
+    // Immobilizer/engine-cutoff state - currently only ever reported by
+    // TrackonGPS for this fleet (Trakzee's equivalent fields read empty).
+    if (raw.Blocked) entries.push(["Immobilizer", raw.Blocked === "ON" ? "Engaged" : "Off"]);
 
     if (!entries.length) {
       card.hidden = true;
