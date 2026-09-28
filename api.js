@@ -179,6 +179,118 @@ const API = (() => {
     return data;
   }
 
+  // Operator verification state (confirmed maintenance vs. marked as not maintenance).
+  // Stored in Supabase if vehicle_maintenance_records table exists, with localStorage
+  // mirror so confirmation works immediately in all environments.
+  const LOCAL_MAINTENANCE_STORAGE_KEY = "drivra_maintenance_verifications_v1";
+
+  async function fetchMaintenanceVerifications() {
+    const local = JSON.parse(localStorage.getItem(LOCAL_MAINTENANCE_STORAGE_KEY) || "{}");
+    const map = new Map(Object.entries(local));
+    try {
+      const { data, error } = await AUTH.client
+        .from("vehicle_maintenance_records")
+        .select("*");
+      if (!error && data) {
+        for (const row of data) {
+          map.set(row.visit_key, row);
+        }
+      }
+    } catch {
+      // Table doesn't exist yet, local state used
+    }
+    return map;
+  }
+
+  async function saveMaintenanceVerification(record) {
+    const local = JSON.parse(localStorage.getItem(LOCAL_MAINTENANCE_STORAGE_KEY) || "{}");
+    local[record.visit_key] = record;
+    localStorage.setItem(LOCAL_MAINTENANCE_STORAGE_KEY, JSON.stringify(local));
+
+    try {
+      await AUTH.client
+        .from("vehicle_maintenance_records")
+        .upsert(record, { onConflict: "visit_key" });
+    } catch {
+      // Supabase table fallback
+    }
+    return record;
+  }
+
+  async function deleteMaintenanceVerification(visitKey) {
+    const local = JSON.parse(localStorage.getItem(LOCAL_MAINTENANCE_STORAGE_KEY) || "{}");
+    delete local[visitKey];
+    localStorage.setItem(LOCAL_MAINTENANCE_STORAGE_KEY, JSON.stringify(local));
+
+    try {
+      await AUTH.client
+        .from("vehicle_maintenance_records")
+        .delete()
+        .eq("visit_key", visitKey);
+    } catch {
+      // Fallback
+    }
+  }
+
+  // Maintenance category management via Supabase API (vehicle_maintenance_categories table)
+  const LOCAL_MAINTENANCE_CATEGORIES_KEY = "drivra_maintenance_categories_v1";
+
+  async function fetchMaintenanceCategories() {
+    const local = JSON.parse(localStorage.getItem(LOCAL_MAINTENANCE_CATEGORIES_KEY) || "[]");
+    try {
+      const { data, error } = await AUTH.client
+        .from("vehicle_maintenance_categories")
+        .select("name")
+        .order("name");
+      if (!error && data && data.length > 0) {
+        const remoteNames = data.map((d) => d.name);
+        // Sync local cache with remote
+        const merged = Array.from(new Set([...local, ...remoteNames]));
+        localStorage.setItem(LOCAL_MAINTENANCE_CATEGORIES_KEY, JSON.stringify(merged));
+        return merged;
+      }
+    } catch {
+      // Table doesn't exist yet, local state used
+    }
+    return local;
+  }
+
+  async function saveMaintenanceCategory(categoryName) {
+    const name = (categoryName || "").trim();
+    if (!name) return null;
+
+    const local = JSON.parse(localStorage.getItem(LOCAL_MAINTENANCE_CATEGORIES_KEY) || "[]");
+    if (!local.includes(name)) {
+      local.push(name);
+      localStorage.setItem(LOCAL_MAINTENANCE_CATEGORIES_KEY, JSON.stringify(local));
+    }
+
+    try {
+      await AUTH.client
+        .from("vehicle_maintenance_categories")
+        .upsert({ name, updated_at: new Date().toISOString() }, { onConflict: "name" });
+    } catch {
+      // Fallback
+    }
+    return name;
+  }
+
+  async function deleteMaintenanceCategory(categoryName) {
+    const name = (categoryName || "").trim();
+    const local = JSON.parse(localStorage.getItem(LOCAL_MAINTENANCE_CATEGORIES_KEY) || "[]");
+    const updated = local.filter((c) => c !== name);
+    localStorage.setItem(LOCAL_MAINTENANCE_CATEGORIES_KEY, JSON.stringify(updated));
+
+    try {
+      await AUTH.client
+        .from("vehicle_maintenance_categories")
+        .delete()
+        .eq("name", name);
+    } catch {
+      // Fallback
+    }
+  }
+
   // GPS-jump / frozen-while-moving anomalies - see schema.sql's
   // vehicle_gps_anomalies(). No external data needed: this flags readings
   // that are internally inconsistent (implied speed too high to be real, or
@@ -369,6 +481,7 @@ const API = (() => {
     if (error) throw error;
     return data;
   }
+
 
   // Per-vehicle-per-day gross Yango revenue via the mapped driver - see
   // schema.sql's vehicle_revenue_day_metrics(). Mapped vehicles only;
@@ -571,6 +684,12 @@ const API = (() => {
     fetchVehicleHistoryDelta,
     fetchDailyMetrics,
     fetchMaintenanceVisits,
+    fetchMaintenanceVerifications,
+    saveMaintenanceVerification,
+    deleteMaintenanceVerification,
+    fetchMaintenanceCategories,
+    saveMaintenanceCategory,
+    deleteMaintenanceCategory,
     fetchAnomalies,
     fetchVehicleDriverMappings,
     currentDriverByImei,

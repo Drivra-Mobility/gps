@@ -16,103 +16,229 @@
   <body>
     <div class="page-shell">
       <main class="page-main">
-    <div class="page-header">
-      <h1>Maintenance</h1>
-      <p class="sub">Discrete visit episodes — a repair spanning several days is one row, not several.</p>
-    </div>
-
-    <section class="controls" aria-label="Filters">
-      <div class="control">
-        <label for="range-start">From</label>
-        <input id="range-start" type="date" />
-      </div>
-      <div class="control">
-        <label for="range-end">To</label>
-        <input id="range-end" type="date" />
-      </div>
-    </section>
-
-    <section class="chart-grid" aria-label="Maintenance rankings">
-      <article class="card card-chart">
-        <header class="card-head">
-          <h2>
-            Longest in maintenance right now
-            <span
-              class="info-tip"
-              tabindex="0"
-              data-tooltip="Vehicles currently mid-visit (haven't left the maintenance geofence yet), ranked by how long the current visit has run so far. Independent of the date range above — this is about right now, not the selected period."
-              aria-label="Vehicles currently mid-visit, ranked by how long the current visit has run so far. Independent of the date range above."
-            ></span>
-          </h2>
-          <p class="card-sub">ongoing maintenance visits, hours so far</p>
-        </header>
-        <div class="chart-wrap">
-          <svg id="chart-lb-maintenance-now" class="chart-svg" data-tip="tip-lb-maintenance-now" role="img" aria-label="Vehicles currently in maintenance, by duration so far"></svg>
+        <div class="page-header">
+          <h1>Maintenance</h1>
+          <p class="sub">
+            Garow workshop visit detection (&ge; 15m dwell), operator confirmation workflow, and verified repair records.
+          </p>
         </div>
-      </article>
-    </section>
 
-    <section class="card">
-      <header class="card-head">
-        <h2>Visit frequency by vehicle</h2>
-        <p class="card-sub">
-          How many maintenance visits each vehicle had in the selected date range, and who was
-          driving at the time of each visit — not necessarily who drives it now.
-        </p>
-      </header>
-      <div class="table-wrap">
-        <table id="frequency-table">
-          <caption class="visually-hidden">Maintenance visit frequency by vehicle, sortable by column</caption>
-          <thead>
-            <tr>
-              <th scope="col" data-sort="vehicle_no">Vehicle</th>
-              <th scope="col" data-sort="driver">Driver</th>
-              <th scope="col" data-sort="visits" class="num" aria-sort="descending">Visits</th>
-              <th scope="col" data-sort="totalSeconds" class="num">Total time in maintenance</th>
-            </tr>
-          </thead>
-          <tbody id="frequency-tbody">
-            <tr>
-              <td colspan="4" class="empty">Loading…</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+        <section class="controls" aria-label="Filters">
+          <div class="control">
+            <label for="range-start">From</label>
+            <input id="range-start" type="date" />
+          </div>
+          <div class="control">
+            <label for="range-end">To</label>
+            <input id="range-end" type="date" />
+          </div>
+        </section>
 
-    <section class="card">
-      <header class="card-head">
-        <h2>Recent maintenance visits</h2>
-        <p class="card-sub">Discrete visit episodes in the selected date range, sortable by column.</p>
-      </header>
-      <div class="table-wrap">
-        <table id="visits-table">
-          <caption class="visually-hidden">Recent maintenance visits, sortable by column</caption>
-          <thead>
-            <tr>
-              <th scope="col" data-sort="vehicle_no">Vehicle</th>
-              <th scope="col" data-sort="visit_start">Start</th>
-              <th scope="col" data-sort="visit_end">End</th>
-              <th scope="col" data-sort="duration_seconds" class="num" aria-sort="descending">
-                Duration
-                <span class="info-tip info-tip-right" tabindex="0" data-tooltip="Wall-clock time from the first to the last reading inside the maintenance geofence for this visit. An ongoing visit (no End shown) uses the current time as the end, so this number keeps growing until the vehicle actually leaves." aria-label="Wall-clock time from first to last reading inside the maintenance geofence. Ongoing visits use the current time as the end and keep growing."></span>
-              </th>
-            </tr>
-          </thead>
-          <tbody id="visits-tbody">
-            <tr>
-              <td colspan="4" class="empty">Loading…</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+        <!-- KPI summary tiles -->
+        <section class="kpis" aria-label="Maintenance overview">
+          <article class="kpi">
+            <h2>
+              Pending Confirmation
+              <span
+                class="info-tip"
+                tabindex="0"
+                data-tooltip="Garow workshop visits awaiting operator confirmation to log repair category and details or dismiss non-maintenance stops."
+                aria-label="Garow visits awaiting operator confirmation."
+              ></span>
+            </h2>
+            <p class="kpi-value" id="kpi-pending">—</p>
+            <p class="kpi-note" id="kpi-pending-note">awaiting review</p>
+          </article>
+          <article class="kpi">
+            <h2>
+              <span class="swatch swatch-maintenance" aria-hidden="true"></span>Ongoing at Garow
+            </h2>
+            <p class="kpi-value" id="kpi-ongoing">—</p>
+            <p class="kpi-note">currently in workshop</p>
+          </article>
+          <article class="kpi">
+            <h2>
+              <span class="swatch swatch-parked" aria-hidden="true"></span>Confirmed Visits
+            </h2>
+            <p class="kpi-value" id="kpi-confirmed">—</p>
+            <p class="kpi-note">verified in selected range</p>
+          </article>
+          <article class="kpi">
+            <h2>Total Service Time</h2>
+            <p class="kpi-value" id="kpi-total-time">—</p>
+            <p class="kpi-note">across confirmed visits</p>
+          </article>
+        </section>
 
-    <footer class="foot">
-      <span id="status">—</span>
-    </footer>
+        <!-- Action Required: Candidates Table -->
+        <section class="card" id="section-candidates">
+          <header class="card-head">
+            <h2>
+              Maintenance confirmation required
+              <span
+                class="info-tip"
+                tabindex="0"
+                data-tooltip="Vehicles detected at Garow workshop. Review each visit to confirm repair details or dismiss if not a maintenance visit."
+                aria-label="Garow visits awaiting operator confirmation."
+              ></span>
+            </h2>
+            <p class="card-sub">
+              Confirm maintenance to log issue category and work details, or mark as "Not Maintenance".
+            </p>
+          </header>
+          <div class="table-wrap">
+            <table id="candidates-table">
+              <caption class="visually-hidden">Maintenance candidates awaiting confirmation</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Vehicle</th>
+                  <th scope="col">Driver (at visit)</th>
+                  <th scope="col">Entry Time</th>
+                  <th scope="col">Exit Time</th>
+                  <th scope="col" class="num">Garow Dwell</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="candidates-tbody">
+                <tr>
+                  <td colspan="6" class="empty">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-    <div id="tip-lb-maintenance-now" class="tip" hidden></div>
+        <!-- Ongoing Visits Chart -->
+        <section class="chart-grid" aria-label="Maintenance rankings">
+          <article class="card card-chart">
+            <header class="card-head">
+              <h2>
+                Longest in maintenance right now
+                <span
+                  class="info-tip"
+                  tabindex="0"
+                  data-tooltip="Vehicles currently mid-visit (haven't left the Garow geofence yet), ranked by duration so far. Independent of date range."
+                  aria-label="Vehicles currently inside Garow workshop, ranked by duration so far."
+                ></span>
+              </h2>
+              <p class="card-sub">ongoing maintenance visits, hours so far</p>
+            </header>
+            <div class="chart-wrap">
+              <svg id="chart-lb-maintenance-now" class="chart-svg" data-tip="tip-lb-maintenance-now" role="img" aria-label="Vehicles currently in maintenance, by duration so far"></svg>
+            </div>
+          </article>
+        </section>
+
+        <!-- Frequency by Vehicle -->
+        <section class="card">
+          <header class="card-head">
+            <h2>Visit frequency by vehicle</h2>
+            <p class="card-sub">
+              How many confirmed maintenance visits each vehicle had in the selected range, and who was driving at the time.
+            </p>
+          </header>
+          <div class="table-wrap">
+            <table id="frequency-table">
+              <caption class="visually-hidden">Maintenance visit frequency by vehicle, sortable by column</caption>
+              <thead>
+                <tr>
+                  <th scope="col" data-sort="vehicle_no">Vehicle</th>
+                  <th scope="col" data-sort="driver">Driver</th>
+                  <th scope="col" data-sort="visits" class="num" aria-sort="descending">Visits</th>
+                  <th scope="col" data-sort="totalSeconds" class="num">Total time in maintenance</th>
+                </tr>
+              </thead>
+              <tbody id="frequency-tbody">
+                <tr>
+                  <td colspan="4" class="empty">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Recent Maintenance Log -->
+        <section class="card">
+          <header class="card-head">
+            <h2>Recent maintenance visits & log</h2>
+            <p class="card-sub">All discrete Garow visit episodes in the selected date range.</p>
+          </header>
+          <div class="table-wrap">
+            <table id="visits-table">
+              <caption class="visually-hidden">Recent maintenance visits, sortable by column</caption>
+              <thead>
+                <tr>
+                  <th scope="col" data-sort="vehicle_no">Vehicle</th>
+                  <th scope="col" data-sort="driver">Driver</th>
+                  <th scope="col" data-sort="status">Status / Category</th>
+                  <th scope="col">Details</th>
+                  <th scope="col" data-sort="visit_start">Start</th>
+                  <th scope="col" data-sort="visit_end">End</th>
+                  <th scope="col" data-sort="duration_seconds" class="num" aria-sort="descending">
+                    Duration
+                    <span class="info-tip info-tip-right" tabindex="0" data-tooltip="Wall-clock time from the first to the last reading inside the Garow geofence. Ongoing visits keep growing until the vehicle departs." aria-label="Wall-clock time inside Garow."></span>
+                  </th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="visits-tbody">
+                <tr>
+                  <td colspan="8" class="empty">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <footer class="foot">
+          <span id="status">—</span>
+        </footer>
+
+        <div id="tip-lb-maintenance-now" class="tip" hidden></div>
+
+        <!-- Confirmation Modal -->
+        <div id="confirm-modal" class="modal-overlay" hidden>
+          <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <div class="modal-header">
+              <div>
+                <h2 id="modal-title">Confirm Maintenance Record</h2>
+                <p id="modal-subtitle" class="modal-subtitle">—</p>
+              </div>
+              <button id="modal-close-btn" class="btn btn-quiet" type="button" aria-label="Close modal">✕</button>
+            </div>
+            <form id="confirm-form" class="modal-body">
+              <input type="hidden" id="modal-visit-key" />
+              <input type="hidden" id="modal-imei" />
+              <input type="hidden" id="modal-vehicle-no" />
+              <input type="hidden" id="modal-start" />
+              <input type="hidden" id="modal-end" />
+              <input type="hidden" id="modal-duration" />
+              <input type="hidden" id="modal-driver" />
+
+              <div class="form-group">
+                <label for="modal-issue-type">Issue / Maintenance Category *</label>
+                <select id="modal-issue-type" required>
+                  <option value="">Select category…</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label for="modal-details">Work Done / Issue Details</label>
+                <textarea id="modal-details" placeholder="Describe the maintenance performed, parts replaced, or mechanic notes…"></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="modal-cost">Cost / Invoice (NPR - optional)</label>
+                <input id="modal-cost" type="number" min="0" step="1" placeholder="e.g. 1500" />
+              </div>
+
+              <div class="modal-footer">
+                <button id="modal-cancel-btn" class="btn btn-quiet" type="button">Cancel</button>
+                <button id="modal-submit-btn" class="btn btn-primary" type="submit">Create Maintenance Record</button>
+              </div>
+            </form>
+          </div>
+        </div>
 
       </main>
 

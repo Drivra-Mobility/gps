@@ -36,8 +36,12 @@ const CONFIG = {
   // compound, so a tighter radius than the 200m outdoor parking yard seemed
   // right. CONFIRM THIS once there's real data near this point, the same
   // way PARK_RADIUS_M was derived.
-  MAINTENANCE_CENTER: { lat: 27.7365952, lon: 85.341527 },
-  MAINTENANCE_RADIUS_M: 200, // GUESS - not data-derived, see comment above
+  // Garow Nepal workshop compound (building 182 / inner alley, off Ring Road)
+  MAINTENANCE_CENTER: { lat: 27.73665, lon: 85.34185 },
+  MAINTENANCE_RADIUS_M: 22, // 15m micro-radius covering just the workshop & immediate entrance
+
+  // Minimum dwell minutes for candidate queue (0 means all visits to Garow count & can be confirmed)
+  MAINTENANCE_MIN_CANDIDATE_MINUTES: 0,
 
   // A vehicle with no report in longer than this counts as "offline".
   STALE_MINUTES: 60,
