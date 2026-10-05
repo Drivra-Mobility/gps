@@ -333,8 +333,9 @@ const API = (() => {
   // tooltips) so the valid_to===null filter lives in exactly one place.
   function currentDriverByImei(mappings) {
     const map = new Map();
+    if (!Array.isArray(mappings)) return map;
     for (const m of mappings) {
-      if (m.valid_to === null) map.set(m.imei_no, m);
+      if (m && m.valid_to === null) map.set(m.imei_no, m);
     }
     return map;
   }
@@ -361,7 +362,10 @@ const API = (() => {
   // for driver mappings - the lookup shape every page wants.
   function vehicleAttributesByImei(attributes) {
     const map = new Map();
-    for (const a of attributes) map.set(a.imei_no, a);
+    if (!Array.isArray(attributes)) return map;
+    for (const a of attributes) {
+      if (a) map.set(a.imei_no, a);
+    }
     return map;
   }
 
@@ -595,10 +599,73 @@ const API = (() => {
   // whatever's loaded for the display window (see app.js/vehicle.js for
   // why those are kept separate).
   function classifyState(row, durationHistoryRows) {
-    const base = classify(row);
-    if (base !== "idle") return base;
+    return classify(row);
+  }
+
+  // Multi-tier classification into Geofence (Maintenance, Parking, In KTM, Outside KTM)
+  // and Status (Idle -> ST/LT Idle, Offline, Moving -> Low/High Speed).
+  function classifyDetailed(row, durationHistoryRows) {
+    const lat = row.latitude;
+    const lon = row.longitude;
+    const zone = GEO.classifyZone(lat, lon);
+    const zoneLabels = {
+      maintenance: "Maintenance",
+      parking: "Parking",
+      in_ktm: "In KTM",
+      outside_ktm: "Outside KTM",
+    };
+
+    const ageMin = row.device_datetime
+      ? (Date.now() - new Date(row.device_datetime).getTime()) / 60000
+      : Infinity;
+
+    if (!row.device_datetime || ageMin > CONFIG.STALE_MINUTES) {
+      return {
+        zone,
+        zoneLabel: zoneLabels[zone] || "In KTM",
+        status: "offline",
+        subStatus: null,
+        statusLabel: "Offline",
+        subStatusLabel: "Offline",
+        speed: 0,
+        idleMinutes: 0,
+        state: "offline",
+      };
+    }
+
+    const speed = Number(row.speed) || 0;
+    if (speed > 0) {
+      const isLow = speed <= (CONFIG.SPEED_LOW_THRESHOLD_KMH || 40);
+      const subStatus = isLow ? "low_speed" : "high_speed";
+      return {
+        zone,
+        zoneLabel: zoneLabels[zone] || "In KTM",
+        status: "moving",
+        subStatus,
+        statusLabel: "Moving",
+        subStatusLabel: isLow ? "Low Speed" : "High Speed",
+        speed,
+        idleMinutes: 0,
+        state: "moving",
+      };
+    }
+
+    // Vehicle is Idle (no more 'inactive' status)
     const { seconds } = stateDurationFromHistory(durationHistoryRows || [], "idle");
-    return seconds >= CONFIG.INACTIVE_MINUTES * 60 ? "inactive" : "idle";
+    const idleMinutes = seconds > 0 ? seconds / 60 : ageMin;
+    const isST = idleMinutes <= (CONFIG.IDLE_ST_THRESHOLD_MINUTES || 60);
+    const subStatus = isST ? "st_idle" : "lt_idle";
+    return {
+      zone,
+      zoneLabel: zoneLabels[zone] || "In KTM",
+      status: "idle",
+      subStatus,
+      statusLabel: "Idle",
+      subStatusLabel: isST ? "ST Idle (≤1h)" : "LT Idle (>1h)",
+      speed: 0,
+      idleMinutes,
+      state: "idle",
+    };
   }
 
   function ageSeconds(deviceDatetime) {
@@ -706,6 +773,7 @@ const API = (() => {
     groupByVehicle,
     classify,
     classifyState,
+    classifyDetailed,
     ageSeconds,
     vehicleMetrics,
     fleetTimeSeries,

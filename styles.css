@@ -1057,6 +1057,16 @@ thead th[aria-sort="descending"]::after {
   content: "↓";
 }
 
+.th-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-muted);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 1px;
+}
+
 /* Columns of numbers align vertically, so tabular figures belong here. */
 td.num,
 th.num {
@@ -1625,4 +1635,256 @@ tbody tr.is-selected {
 
 .category-chip-remove:hover {
   color: #eb5757;
+}
+
+/* ---------- Zone Matrix Grid & Cards ---------- */
+
+.zone-matrix-section {
+  margin-bottom: var(--gap);
+}
+
+.zone-matrix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.zone-matrix-head h2 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zone-matrix-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: var(--gap);
+}
+
+.zone-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.status-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.zone-card,
+.status-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  user-select: none;
+}
+
+.zone-card:hover,
+.status-card:hover {
+  border-color: var(--brand);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.zone-card.is-active,
+.status-card.is-active {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand-100), 0 4px 12px rgba(0, 0, 0, 0.12);
+  background: var(--surface-1);
+}
+
+.zone-card.is-active::after,
+.status-card.is-active::after {
+  content: "Filter active";
+  position: absolute;
+  top: -9px;
+  right: 12px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.zone-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.zone-card-title {
+  font-size: 14px;
+  font-weight: 800; /* Bold as specified in sheet */
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: -0.01em;
+}
+
+.zone-count-badge {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+  background: var(--surface-2, rgba(128, 128, 128, 0.1));
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.zone-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.zone-subgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  transition: background 0.15s ease;
+}
+
+.zone-subgroup:hover {
+  background: var(--surface-2, rgba(128, 128, 128, 0.08));
+}
+
+.zone-subgroup-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.zone-subgroup-title-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.zone-subgroup-count {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.zone-subgroup-items {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 18px;
+  padding-top: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.zone-subitem-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.zone-subitem-row strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+/* Zone badges in vehicle table */
+.zone-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.zone-badge-maintenance {
+  background: rgba(217, 89, 38, 0.15);
+  color: var(--state-maintenance);
+  border-color: rgba(217, 89, 38, 0.3);
+}
+
+.zone-badge-parking {
+  background: rgba(25, 158, 112, 0.15);
+  color: var(--state-parked);
+  border-color: rgba(25, 158, 112, 0.3);
+}
+
+.zone-badge-in_ktm {
+  background: rgba(57, 135, 229, 0.15);
+  color: var(--state-moving);
+  border-color: rgba(57, 135, 229, 0.3);
+}
+
+.zone-badge-outside_ktm {
+  background: rgba(185, 55, 106, 0.15);
+  color: var(--state-inactive);
+  border-color: rgba(185, 55, 106, 0.3);
+}
+
+.state-sub-detail {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.active-filter-bar[hidden] {
+  display: none !important;
+}
+
+.active-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--brand-100);
+  border: 1px solid var(--brand);
+  border-radius: var(--radius);
+  margin-bottom: var(--gap);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.active-filter-bar button {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.active-filter-bar button:hover {
+  border-color: var(--brand);
 }

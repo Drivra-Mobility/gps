@@ -56,6 +56,7 @@
   // each frame - pass the same formatter used elsewhere (fmtKm, fmtPct...)
   // so the animated frames look like the real thing, not a bare number.
   function animateNumber(el, to, opts = {}) {
+    if (!el) return;
     const { ms = 500, format = (v) => String(Math.round(v)) } = opts;
     const from = Number(el.dataset.raw || 0);
     el.dataset.raw = to;
@@ -102,7 +103,8 @@
   // window would include), and driver mappings/today's metrics only
   // refresh every CONFIG.SLOW_REFRESH_MS, not every CONFIG.REFRESH_MS tick.
   async function loadAll() {
-    const hours = Number(document.getElementById("window").value);
+    const windowEl = document.getElementById("window");
+    const hours = windowEl ? Number(windowEl.value) : (CONFIG.DEFAULT_WINDOW_HOURS || 3);
     const isFreshWindow = hours !== currentWindowHours || historyRows.length === 0;
     const needsSlowRefresh = isFreshWindow || Date.now() - lastSlowRefreshAt >= CONFIG.SLOW_REFRESH_MS;
     const isFreshDuration = durationRows.length === 0;
@@ -116,30 +118,48 @@
         isFreshDuration
           ? API.fetchHistorySince(CONFIG.INACTIVE_LOOKBACK_HOURS)
           : API.fetchHistoryDelta(lastDurationMaxPolledAt),
-        needsSlowRefresh ? API.fetchVehicleDriverMappings() : Promise.resolve(null),
+        needsSlowRefresh
+          ? API.fetchVehicleDriverMappings().catch((err) => {
+              console.warn("Failed fetching driver mappings", err);
+              return [];
+            })
+          : Promise.resolve(null),
         // Manually-maintained, same infrequent-change cadence as driver
         // mappings - no reason to refresh it any faster.
-        needsSlowRefresh ? API.fetchVehicleAttributes() : Promise.resolve(null),
-        needsSlowRefresh ? API.fetchDailyMetrics({ startDate: today, endDate: today }) : Promise.resolve(null),
+        needsSlowRefresh
+          ? API.fetchVehicleAttributes().catch((err) => {
+              console.warn("Failed fetching attributes", err);
+              return [];
+            })
+          : Promise.resolve(null),
+        needsSlowRefresh
+          ? API.fetchDailyMetrics({ startDate: today, endDate: today }).catch((err) => {
+              console.warn("Failed fetching daily metrics", err);
+              return [];
+            })
+          : Promise.resolve(null),
         // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
         // above, ~15min behind via fleet.*_cache) - always fully live.
         needsSlowRefresh
-          ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today })
+          ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }).catch((err) => {
+              console.warn("Failed fetching revenue metrics", err);
+              return [];
+            })
           : Promise.resolve(null),
       ]);
 
-    latestRows = latest;
+    latestRows = latest || [];
     historyRows = isFreshWindow
-      ? historyDelta
-      : API.mergeHistoryRows(historyRows, historyDelta, hours);
-    const newMax = API.maxPolledAt(historyDelta);
+      ? (historyDelta || [])
+      : API.mergeHistoryRows(historyRows, historyDelta || [], hours);
+    const newMax = API.maxPolledAt(historyDelta || []);
     if (newMax) lastHistoryMaxPolledAt = newMax;
     currentWindowHours = hours;
 
     durationRows = isFreshDuration
-      ? durationDelta
-      : API.mergeHistoryRows(durationRows, durationDelta, CONFIG.INACTIVE_LOOKBACK_HOURS);
-    const newDurationMax = API.maxPolledAt(durationDelta);
+      ? (durationDelta || [])
+      : API.mergeHistoryRows(durationRows, durationDelta || [], CONFIG.INACTIVE_LOOKBACK_HOURS);
+    const newDurationMax = API.maxPolledAt(durationDelta || []);
     if (newDurationMax) lastDurationMaxPolledAt = newDurationMax;
     durationGrouped = API.groupByVehicle(durationRows);
 
@@ -150,16 +170,26 @@
     }
 
     if (needsSlowRefresh) {
-      driverByImei = API.currentDriverByImei(mappings);
-      attributesByImei = API.vehicleAttributesByImei(attributes);
-      distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
-      revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
+      if (mappings) driverByImei = API.currentDriverByImei(mappings);
+      if (attributes) attributesByImei = API.vehicleAttributesByImei(attributes);
+      if (Array.isArray(dayMetricsToday)) {
+        distanceTodayByImei = new Map(dayMetricsToday.map((m) => [m.imei_no, m.distance_km]));
+      }
+      if (Array.isArray(revenueToday)) {
+        revenueTodayByImei = new Map(revenueToday.map((m) => [m.imei_no, m.gross_revenue]));
+      }
       lastSlowRefreshAt = Date.now();
     }
   }
 
+  let selectedFilter = null; // null or { type: "zone" | "status", value: string }
+
   function rowState(row) {
     return API.classifyState(row, durationGrouped.get(row.imei_no) || []);
+  }
+
+  function rowDetailed(row) {
+    return API.classifyDetailed(row, durationGrouped.get(row.imei_no) || []);
   }
 
   function driverName(imei) {
@@ -167,59 +197,226 @@
     return m ? m.driver_name || m.driver_phone : null;
   }
 
-  // ---- KPIs ---------------------------------------------------------
+  // ---- Geofence & Status Matrix KPIs ---------------------------------
 
   function renderKpis() {
-    const states = latestRows.map((r) => ({ row: r, state: rowState(r) }));
-    const count = (s) => states.filter((x) => x.state === s).length;
+    // 1. Zone-first matrix (Row 1)
+    const zoneMatrix = {
+      maintenance: { total: 0, idle: 0, st_idle: 0, lt_idle: 0, offline: 0, moving: 0, low_speed: 0, high_speed: 0 },
+      parking: { total: 0, idle: 0, st_idle: 0, lt_idle: 0, offline: 0, moving: 0, low_speed: 0, high_speed: 0 },
+      in_ktm: { total: 0, idle: 0, st_idle: 0, lt_idle: 0, offline: 0, moving: 0, low_speed: 0, high_speed: 0 },
+      outside_ktm: { total: 0, idle: 0, st_idle: 0, lt_idle: 0, offline: 0, moving: 0, low_speed: 0, high_speed: 0 },
+    };
 
-    animateNumber(document.getElementById("kpi-total"), latestRows.length);
-    document.getElementById("kpi-total-note").textContent = `of ${latestRows.length} vehicles`;
-    animateNumber(document.getElementById("kpi-moving"), count("moving"));
-    animateNumber(document.getElementById("kpi-maintenance"), count("maintenance"));
-    animateNumber(document.getElementById("kpi-parked"), count("parked"));
-    animateNumber(document.getElementById("kpi-idle"), count("idle"));
-    animateNumber(document.getElementById("kpi-inactive"), count("inactive"));
-    const offline = count("offline");
-    animateNumber(document.getElementById("kpi-offline"), offline);
-    document.getElementById("kpi-offline-card").classList.toggle("is-alerting", offline > 0);
+    // 2. Status-first matrix (Row 2)
+    const statusMatrix = {
+      idle: { total: 0, maint: 0, park: 0, inktm: 0, outktm: 0 },
+      offline: { total: 0, maint: 0, park: 0, inktm: 0, outktm: 0 },
+      moving: { total: 0, maint: 0, park: 0, inktm: 0, outktm: 0 },
+    };
 
-    let totalKm = 0;
-    let speedSum = 0;
-    let speedN = 0;
-    let movingSum = 0;
-    let movingN = 0;
-    for (const m of metrics.values()) {
-      totalKm += m.distanceKm;
-      if (m.avgSpeedKmh > 0) {
-        speedSum += m.avgSpeedKmh;
-        speedN++;
+    const detailedList = latestRows.map((r) => ({
+      row: r,
+      detailed: rowDetailed(r),
+    }));
+
+    for (const { detailed } of detailedList) {
+      const zKey = detailed.zone; // maintenance, parking, in_ktm, outside_ktm
+      const sKey = detailed.status; // idle, offline, moving
+      const subKey = detailed.subStatus; // st_idle, lt_idle, low_speed, high_speed
+
+      // Zone matrix increment
+      const zm = zoneMatrix[zKey];
+      if (zm) {
+        zm.total++;
+        if (sKey === "idle") {
+          zm.idle++;
+          if (subKey === "st_idle") zm.st_idle++;
+          if (subKey === "lt_idle") zm.lt_idle++;
+        } else if (sKey === "offline") {
+          zm.offline++;
+        } else if (sKey === "moving") {
+          zm.moving++;
+          if (subKey === "low_speed") zm.low_speed++;
+          if (subKey === "high_speed") zm.high_speed++;
+        }
       }
-      movingSum += m.movingPct;
-      movingN++;
+
+      // Status matrix increment
+      const sm = statusMatrix[sKey];
+      if (sm) {
+        sm.total++;
+        const zoneShortKey = zKey === "maintenance" ? "maint" : zKey === "parking" ? "park" : zKey === "in_ktm" ? "inktm" : "outktm";
+        if (sm[zoneShortKey] !== undefined) {
+          sm[zoneShortKey]++;
+        }
+      }
     }
-    animateNumber(document.getElementById("kpi-distance"), totalKm, { format: fmtKm });
-    const avgSpeedEl = document.getElementById("kpi-avgspeed");
-    if (speedN) animateNumber(avgSpeedEl, speedSum / speedN, { format: fmtSpeed });
-    else {
-      avgSpeedEl.textContent = "—";
-      avgSpeedEl.dataset.raw = 0;
-    }
-    const utilEl = document.getElementById("kpi-utilisation");
-    if (movingN) animateNumber(utilEl, movingSum / movingN, { format: fmtPct });
-    else {
-      utilEl.textContent = "—";
-      utilEl.dataset.raw = 0;
-    }
+
+    // --- Populate Zone Grid (Row 1) ---
+    // 1. Maintenance Yard
+    animateNumber(document.getElementById("count-zone-maintenance"), zoneMatrix.maintenance.total);
+    animateNumber(document.getElementById("count-maint-idle"), zoneMatrix.maintenance.idle);
+    animateNumber(document.getElementById("count-maint-st-idle"), zoneMatrix.maintenance.st_idle);
+    animateNumber(document.getElementById("count-maint-lt-idle"), zoneMatrix.maintenance.lt_idle);
+    animateNumber(document.getElementById("count-maint-offline"), zoneMatrix.maintenance.offline);
+    animateNumber(document.getElementById("count-maint-moving"), zoneMatrix.maintenance.moving);
+    animateNumber(document.getElementById("count-maint-low-speed"), zoneMatrix.maintenance.low_speed);
+    animateNumber(document.getElementById("count-maint-high-speed"), zoneMatrix.maintenance.high_speed);
+
+    // 2. Parking Yard
+    animateNumber(document.getElementById("count-zone-parking"), zoneMatrix.parking.total);
+    animateNumber(document.getElementById("count-park-idle"), zoneMatrix.parking.idle);
+    animateNumber(document.getElementById("count-park-st-idle"), zoneMatrix.parking.st_idle);
+    animateNumber(document.getElementById("count-park-lt-idle"), zoneMatrix.parking.lt_idle);
+    animateNumber(document.getElementById("count-park-offline"), zoneMatrix.parking.offline);
+    animateNumber(document.getElementById("count-park-moving"), zoneMatrix.parking.moving);
+    animateNumber(document.getElementById("count-park-low-speed"), zoneMatrix.parking.low_speed);
+    animateNumber(document.getElementById("count-park-high-speed"), zoneMatrix.parking.high_speed);
+
+    // 3. Inside Kathmandu (In KTM)
+    animateNumber(document.getElementById("count-zone-in_ktm"), zoneMatrix.in_ktm.total);
+    animateNumber(document.getElementById("count-inktm-idle"), zoneMatrix.in_ktm.idle);
+    animateNumber(document.getElementById("count-inktm-st-idle"), zoneMatrix.in_ktm.st_idle);
+    animateNumber(document.getElementById("count-inktm-lt-idle"), zoneMatrix.in_ktm.lt_idle);
+    animateNumber(document.getElementById("count-inktm-offline"), zoneMatrix.in_ktm.offline);
+    animateNumber(document.getElementById("count-inktm-moving"), zoneMatrix.in_ktm.moving);
+    animateNumber(document.getElementById("count-inktm-low-speed"), zoneMatrix.in_ktm.low_speed);
+    animateNumber(document.getElementById("count-inktm-high-speed"), zoneMatrix.in_ktm.high_speed);
+
+    // 4. Outside Kathmandu
+    animateNumber(document.getElementById("count-zone-outside_ktm"), zoneMatrix.outside_ktm.total);
+    animateNumber(document.getElementById("count-outktm-idle"), zoneMatrix.outside_ktm.idle);
+    animateNumber(document.getElementById("count-outktm-st-idle"), zoneMatrix.outside_ktm.st_idle);
+    animateNumber(document.getElementById("count-outktm-lt-idle"), zoneMatrix.outside_ktm.lt_idle);
+    animateNumber(document.getElementById("count-outktm-offline"), zoneMatrix.outside_ktm.offline);
+    animateNumber(document.getElementById("count-outktm-moving"), zoneMatrix.outside_ktm.moving);
+    animateNumber(document.getElementById("count-outktm-low-speed"), zoneMatrix.outside_ktm.low_speed);
+    animateNumber(document.getElementById("count-outktm-high-speed"), zoneMatrix.outside_ktm.high_speed);
+
+    // --- Populate Status Grid (Row 2) ---
+    // 1. Idle Card
+    animateNumber(document.getElementById("count-status-idle"), statusMatrix.idle.total);
+    animateNumber(document.getElementById("count-status-idle-maint"), statusMatrix.idle.maint);
+    animateNumber(document.getElementById("count-status-idle-park"), statusMatrix.idle.park);
+    animateNumber(document.getElementById("count-status-idle-inktm"), statusMatrix.idle.inktm);
+    animateNumber(document.getElementById("count-status-idle-outktm"), statusMatrix.idle.outktm);
+
+    // 2. Offline Card
+    animateNumber(document.getElementById("count-status-offline"), statusMatrix.offline.total);
+    animateNumber(document.getElementById("count-status-offline-maint"), statusMatrix.offline.maint);
+    animateNumber(document.getElementById("count-status-offline-park"), statusMatrix.offline.park);
+    animateNumber(document.getElementById("count-status-offline-inktm"), statusMatrix.offline.inktm);
+    animateNumber(document.getElementById("count-status-offline-outktm"), statusMatrix.offline.outktm);
+
+    // 3. Moving Card
+    animateNumber(document.getElementById("count-status-moving"), statusMatrix.moving.total);
+    animateNumber(document.getElementById("count-status-moving-maint"), statusMatrix.moving.maint);
+    animateNumber(document.getElementById("count-status-moving-park"), statusMatrix.moving.park);
+    animateNumber(document.getElementById("count-status-moving-inktm"), statusMatrix.moving.inktm);
+    animateNumber(document.getElementById("count-status-moving-outktm"), statusMatrix.moving.outktm);
+
+    updateFilterUI();
 
     const newest = latestRows
       .map((r) => (r.device_datetime ? new Date(r.device_datetime).getTime() : 0))
       .reduce((a, b) => Math.max(a, b), 0);
     const freshEl = document.getElementById("freshness");
-    if (newest) {
+    if (newest && freshEl) {
       const ageSec = (Date.now() - newest) / 1000;
       freshEl.textContent = `newest report: ${fmtAge(ageSec)}`;
       freshEl.classList.toggle("is-stale", ageSec > CONFIG.STALE_MINUTES * 60);
+    }
+  }
+
+  // ---- Interactive Zone & Status Filter Handling -----------------------
+
+  function setFilter(type, value) {
+    if (selectedFilter && selectedFilter.type === type && selectedFilter.value === value) {
+      selectedFilter = null;
+    } else {
+      selectedFilter = { type, value };
+    }
+    updateFilterUI();
+    renderTable();
+    renderMap();
+  }
+
+  function updateFilterUI() {
+    const bar = document.getElementById("active-filter-bar");
+    const text = document.getElementById("active-filter-text");
+    if (!bar || !text) return;
+
+    const zoneCards = document.querySelectorAll(".zone-card");
+    zoneCards.forEach((c) => {
+      c.classList.toggle("is-active", !!(selectedFilter && selectedFilter.type === "zone" && c.dataset.zone === selectedFilter.value));
+    });
+
+    const statusCards = document.querySelectorAll(".status-card");
+    statusCards.forEach((c) => {
+      c.classList.toggle("is-active", !!(selectedFilter && selectedFilter.type === "status" && c.dataset.status === selectedFilter.value));
+    });
+
+    if (selectedFilter) {
+      const labels = {
+        zone: {
+          maintenance: "Maintenance Yard",
+          parking: "Parking Yard",
+          in_ktm: "Inside Kathmandu",
+          outside_ktm: "Outside Kathmandu",
+        },
+        status: {
+          idle: "Idle",
+          offline: "Offline",
+          moving: "Moving",
+        },
+      };
+      bar.hidden = false;
+      const count = tableRows().length;
+      const label = (labels[selectedFilter.type] && labels[selectedFilter.type][selectedFilter.value]) || selectedFilter.value;
+      text.textContent = `Filtered view: ${label} (${count} vehicle${count === 1 ? "" : "s"})`;
+    } else {
+      bar.hidden = true;
+    }
+  }
+
+  function initZoneFilters() {
+    document.querySelectorAll(".zone-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const zone = card.dataset.zone;
+        if (zone) setFilter("zone", zone);
+      });
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          const zone = card.dataset.zone;
+          if (zone) setFilter("zone", zone);
+        }
+      });
+    });
+
+    document.querySelectorAll(".status-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const status = card.dataset.status;
+        if (status) setFilter("status", status);
+      });
+      card.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          const status = card.dataset.status;
+          if (status) setFilter("status", status);
+        }
+      });
+    });
+
+    const clearBtn = document.getElementById("clear-filter-btn");
+    if (clearBtn) {
+      clearBtn.addEventListener("click", () => {
+        selectedFilter = null;
+        updateFilterUI();
+        renderTable();
+        renderMap();
+      });
     }
   }
 
@@ -268,13 +465,9 @@
     const durations = [];
     for (const row of latestRows) {
       const state = rowState(row);
-      if (state !== "idle" && state !== "inactive" && state !== "maintenance") continue;
-      // idle/inactive need the fixed-lookback duration set (a narrow
-      // display window would understate how long a streak has really run
-      // - see classifyState()); maintenance keeps using the display-window
-      // set, since durationGrouped's fixed ~1.5h lookback would UNDERSTATE
-      // a maintenance visit longer than that when a wider window is
-      // selected - this stat existed before Inactive did and shouldn't regress.
+      if (state !== "idle" && state !== "maintenance") continue;
+      // idle needs the fixed-lookback duration set; maintenance keeps using
+      // the display-window set.
       const historySource = state === "maintenance" ? grouped : durationGrouped;
       const d = API.stateDurationFromHistory(historySource.get(row.imei_no) || [], state);
       if (d.seconds <= 0) continue;
@@ -320,7 +513,8 @@
 
     for (const [, layer] of trailLayers) map.removeLayer(layer);
     trailLayers = [];
-    const showTrails = document.getElementById("trails").checked;
+    const trailsEl = document.getElementById("trails");
+    const showTrails = trailsEl ? trailsEl.checked : true;
     if (showTrails) {
       for (const [imei, rows] of grouped.entries()) {
         const pts = rows.filter((r) => r.latitude != null).map((r) => [r.latitude, r.longitude]);
@@ -338,6 +532,7 @@
     for (const row of latestRows) {
       seen.add(row.imei_no);
       const state = rowState(row);
+      const detailed = rowDetailed(row);
       const attrs = attributesByImei.get(row.imei_no);
       const vehicleType = MAP.vehicleTypeOf(row, attrs);
       const icon = MAP.iconFor(
@@ -359,6 +554,17 @@
         marker.setIcon(icon);
         justChangedState = prevState != null && prevState !== state;
       }
+
+      // Filter dimming
+      if (selectedFilter) {
+        let isMatch = false;
+        if (selectedFilter.type === "zone") isMatch = (detailed.zone === selectedFilter.value);
+        if (selectedFilter.type === "status") isMatch = (detailed.status === selectedFilter.value);
+        if (marker.setOpacity) marker.setOpacity(isMatch ? 1.0 : 0.25);
+      } else {
+        if (marker.setOpacity) marker.setOpacity(1.0);
+      }
+
       prevStates.set(row.imei_no, state);
       if (justChangedState) {
         const el = marker.getElement();
@@ -371,11 +577,9 @@
         }
       }
 
-      // idle/inactive need the fixed-lookback duration set for the same
-      // reason as renderAttention() above; every other state keeps using
-      // the display-window set so its duration isn't capped to ~1.5h when
-      // a wider window is selected.
-      const durationSource = state === "idle" || state === "inactive" ? durationGrouped : grouped;
+      // idle needs the fixed-lookback duration set; every other state keeps
+      // using the display-window set.
+      const durationSource = state === "idle" ? durationGrouped : grouped;
       const stateDuration = API.stateDurationFromHistory(durationSource.get(row.imei_no) || [], state);
       marker.bindPopup(
         MAP.buildPopup(row, state, {
@@ -421,15 +625,21 @@
   // ---- table --------------------------------------------------------
 
   function tableRows() {
-    return latestRows.map((row) => {
-      const state = rowState(row);
+    const rows = latestRows.map((row) => {
+      const detailed = rowDetailed(row);
+      const state = detailed.state;
       const m = metrics.get(row.imei_no) || { distanceKm: 0 };
       const attrs = attributesByImei.get(row.imei_no);
       return {
         imei: row.imei_no,
         vehicle_no: row.vehicle_no || row.imei_no,
         driver: driverName(row.imei_no) || "—",
+        zone: detailed.zone,
+        zoneLabel: detailed.zoneLabel,
         state,
+        status: detailed.status,
+        subStatus: detailed.subStatus,
+        subStatusLabel: detailed.subStatusLabel,
         speed: row.speed || 0,
         distance: m.distanceKm,
         distanceToday: distanceTodayByImei.get(row.imei_no) ?? null,
@@ -445,6 +655,16 @@
         provider: row.provider || "—",
       };
     });
+
+    if (selectedFilter) {
+      if (selectedFilter.type === "zone") {
+        return rows.filter((r) => r.zone === selectedFilter.value);
+      }
+      if (selectedFilter.type === "status") {
+        return rows.filter((r) => r.status === selectedFilter.value);
+      }
+    }
+    return rows;
   }
 
   function sortRows(rows) {
@@ -470,7 +690,7 @@
     const rows = sortRows(tableRows());
     tbody.innerHTML = "";
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="11" class="empty">No vehicles reporting.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="12" class="empty">No vehicles reporting in this selection.</td></tr>';
       return;
     }
     for (const r of rows) {
@@ -491,11 +711,23 @@
       const providerTd = document.createElement("td");
       providerTd.textContent = r.provider;
 
+      const zoneTd = document.createElement("td");
+      const zoneBadge = document.createElement("span");
+      zoneBadge.className = `zone-badge zone-badge-${r.zone}`;
+      zoneBadge.textContent = r.zoneLabel;
+      zoneTd.appendChild(zoneBadge);
+
       const stateTd = document.createElement("td");
       const stateSpan = document.createElement("span");
       stateSpan.className = `state state-${r.state}`;
-      stateSpan.textContent = MAP.STATE_LABEL[r.state];
+      stateSpan.textContent = MAP.STATE_LABEL[r.state] || r.state;
       stateTd.appendChild(stateSpan);
+      if (r.subStatusLabel && r.subStatusLabel !== (MAP.STATE_LABEL[r.state] || r.state)) {
+        const subSpan = document.createElement("span");
+        subSpan.className = "state-sub-detail";
+        subSpan.textContent = r.subStatusLabel;
+        stateTd.appendChild(subSpan);
+      }
 
       const speedTd = document.createElement("td");
       speedTd.className = "num";
@@ -531,6 +763,7 @@
         driverTd,
         typeTd,
         providerTd,
+        zoneTd,
         stateTd,
         speedTd,
         distTd,
@@ -559,9 +792,19 @@
     });
   }
 
+  function updateDistanceHeader() {
+    const windowEl = document.getElementById("window");
+    const hours = windowEl ? windowEl.value : "3";
+    const subEl = document.getElementById("th-distance-sub");
+    if (subEl) {
+      subEl.textContent = `last ${hours}h`;
+    }
+  }
+
   // ---- orchestration --------------------------------------------------
 
   function renderAll() {
+    updateDistanceHeader();
     renderKpis();
     renderAttention();
     renderMap();
@@ -595,9 +838,12 @@
   function start() {
     document.getElementById("sign-out").hidden = false;
     document.getElementById("sign-out").addEventListener("click", () => AUTH.signOut());
-    document.getElementById("window").addEventListener("change", refresh);
-    document.getElementById("trails").addEventListener("change", renderMap);
+    const windowSelect = document.getElementById("window");
+    if (windowSelect) windowSelect.addEventListener("change", refresh);
+    const trailsCheckbox = document.getElementById("trails");
+    if (trailsCheckbox) trailsCheckbox.addEventListener("change", renderMap);
     initTableSort();
+    initZoneFilters();
     // Was a hardcoded "90s" that drifted out of sync when REFRESH_MS was
     // tuned (90s -> 120s -> 5min) - compute it instead so it can't drift again.
     const refreshMin = CONFIG.REFRESH_MS / 60_000;

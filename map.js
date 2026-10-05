@@ -9,7 +9,6 @@ const MAP = (() => {
     maintenance: "In maintenance",
     parked: "In parking",
     idle: "Idle",
-    inactive: "Inactive",
     offline: "Offline",
   };
 

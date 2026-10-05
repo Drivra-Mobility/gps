@@ -70,24 +70,38 @@
       isFreshDuration
         ? API.fetchVehicleHistory(imei, CONFIG.INACTIVE_LOOKBACK_HOURS)
         : API.fetchVehicleHistoryDelta(imei, lastDurationMaxPolledAt),
-      needsSlowRefresh ? API.fetchVehicleDriverMappings(imei) : Promise.resolve(null),
-      needsSlowRefresh ? API.fetchVehicleAttributes(imei) : Promise.resolve(null),
+      needsSlowRefresh
+        ? API.fetchVehicleDriverMappings(imei).catch((err) => {
+            console.warn("Failed fetching driver mappings", err);
+            return [];
+          })
+        : Promise.resolve(null),
+      needsSlowRefresh
+        ? API.fetchVehicleAttributes(imei).catch((err) => {
+            console.warn("Failed fetching attributes", err);
+            return [];
+          })
+        : Promise.resolve(null),
     ]);
 
-    rows = isFreshWindow ? historyDelta : API.mergeHistoryRows(rows, historyDelta, hours);
-    const newMax = API.maxPolledAt(historyDelta);
+    rows = isFreshWindow ? (historyDelta || []) : API.mergeHistoryRows(rows, historyDelta || [], hours);
+    const newMax = API.maxPolledAt(historyDelta || []);
     if (newMax) lastHistoryMaxPolledAt = newMax;
     currentWindowHours = hours;
 
     durationRows = isFreshDuration
-      ? durationDelta
-      : API.mergeHistoryRows(durationRows, durationDelta, CONFIG.INACTIVE_LOOKBACK_HOURS);
-    const newDurationMax = API.maxPolledAt(durationDelta);
+      ? (durationDelta || [])
+      : API.mergeHistoryRows(durationRows, durationDelta || [], CONFIG.INACTIVE_LOOKBACK_HOURS);
+    const newDurationMax = API.maxPolledAt(durationDelta || []);
     if (newDurationMax) lastDurationMaxPolledAt = newDurationMax;
 
     if (needsSlowRefresh) {
-      currentDriver = API.currentDriverByImei(mappings).get(imei) || null;
-      vehicleAttrs = attributes && attributes[0] ? attributes[0] : null;
+      if (mappings) {
+        currentDriver = API.currentDriverByImei(mappings).get(imei) || null;
+      }
+      if (attributes) {
+        vehicleAttrs = attributes && attributes[0] ? attributes[0] : null;
+      }
       lastSlowRefreshAt = Date.now();
     }
   }
@@ -177,10 +191,9 @@
       MAP.animateMarkerTo(marker, [latest.latitude, latest.longitude]);
       marker.setIcon(icon);
     }
-    // idle/inactive need the fixed-lookback duration set (see app.js's
-    // matching comment); every other state keeps using the display-window
-    // rows so its duration isn't capped to ~1.5h when a wider window is selected.
-    const durationSource = state === "idle" || state === "inactive" ? durationRows : rows;
+    // idle needs the fixed-lookback duration set; every other state keeps
+    // using the display-window rows.
+    const durationSource = state === "idle" ? durationRows : rows;
     const stateDuration = API.stateDurationFromHistory(durationSource, state);
     const driverName = currentDriver ? currentDriver.driver_name || currentDriver.driver_phone : null;
     marker.bindPopup(MAP.buildPopup(latest, state, { stateDuration, driverName }));

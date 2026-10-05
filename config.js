@@ -36,12 +36,20 @@ const CONFIG = {
   // compound, so a tighter radius than the 200m outdoor parking yard seemed
   // right. CONFIRM THIS once there's real data near this point, the same
   // way PARK_RADIUS_M was derived.
-  // Garow Nepal workshop compound (building 182 / inner alley, off Ring Road)
-  MAINTENANCE_CENTER: { lat: 27.73665, lon: 85.34185 },
-  MAINTENANCE_RADIUS_M: 22, // 15m micro-radius covering just the workshop & immediate entrance
+  // Garow Nepal workshop compound (building 182 / inner alley, slightly nudged NE)
+  MAINTENANCE_CENTER: { lat: 27.73675, lon: 85.34195 },
+  MAINTENANCE_RADIUS_M: 40, // 40m radius covers the Garow building & scooter while staying clear of Ring Road
 
-  // Minimum dwell minutes for candidate queue (0 means all visits to Garow count & can be confirmed)
-  MAINTENANCE_MIN_CANDIDATE_MINUTES: 0,
+  // A third geofence: Kathmandu valley urban boundary.
+  // Vehicles outside both parking/maintenance are classified as In KTM vs Outside KTM.
+  KTM_CENTER: { lat: 27.700769, lon: 85.32014 },
+  KTM_RADIUS_M: 14000, // 14km covers the whole Kathmandu valley ring road & suburbs
+
+  // Speed threshold (km/h) for moving state: <= threshold is Low Speed, > is High Speed
+  SPEED_LOW_THRESHOLD_KMH: 40,
+
+  // Idle duration threshold (minutes): <= threshold is ST Idle (Short-Term), > is LT Idle (Long-Term)
+  IDLE_ST_THRESHOLD_MINUTES: 60,
 
   // A vehicle with no report in longer than this counts as "offline".
   STALE_MINUTES: 60,

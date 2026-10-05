@@ -113,6 +113,7 @@
   // ---- animated numbers (tasteful motion polish) -------------------------
 
   function animateNumber(el, to, opts = {}) {
+    if (!el) return;
     const { ms = 500, format = (v) => String(Math.round(v)) } = opts;
     const from = Number(el.dataset.raw || 0);
     el.dataset.raw = to;

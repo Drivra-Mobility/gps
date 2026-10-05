@@ -35,10 +35,23 @@ const GEO = (() => {
     return isWithin(lat, lon, CONFIG.MAINTENANCE_CENTER, CONFIG.MAINTENANCE_RADIUS_M);
   }
 
+  function isWithinKtm(lat, lon) {
+    if (!CONFIG.KTM_CENTER) return true;
+    return isWithin(lat, lon, CONFIG.KTM_CENTER, CONFIG.KTM_RADIUS_M);
+  }
+
+  // Classifies coordinates into one of the 4 zones:
+  // "maintenance", "parking", "in_ktm", or "outside_ktm"
+  function classifyZone(lat, lon) {
+    if (lat == null || lon == null) return "in_ktm";
+    if (isWithinMaintenance(lat, lon)) return "maintenance";
+    if (isWithinParking(lat, lon)) return "parking";
+    if (isWithinKtm(lat, lon)) return "in_ktm";
+    return "outside_ktm";
+  }
+
   // Sum of consecutive great-circle hops through a time-ordered list of
-  // {latitude, longitude} points. This is a lower bound on real distance
-  // travelled (straight lines between polls, not the road path), which is
-  // the best that a 1-point-per-minute feed can give without a routing API.
+  // {latitude, longitude} points.
   function pathDistanceMeters(points) {
     let total = 0;
     for (let i = 1; i < points.length; i++) {
@@ -58,6 +71,8 @@ const GEO = (() => {
     isWithin,
     isWithinParking,
     isWithinMaintenance,
+    isWithinKtm,
+    classifyZone,
     pathDistanceMeters,
     metersToKm,
   };
