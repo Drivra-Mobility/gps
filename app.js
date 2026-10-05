@@ -82,12 +82,14 @@
     const btn = document.getElementById("theme-toggle");
     const stored = localStorage.getItem("dashboard-theme");
     if (stored) document.documentElement.setAttribute("data-theme", stored);
-    btn.addEventListener("click", () => {
-      const current = document.documentElement.getAttribute("data-theme");
-      const next = current === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next);
-      localStorage.setItem("dashboard-theme", next);
-    });
+    if (btn) {
+      btn.addEventListener("click", () => {
+        const current = document.documentElement.getAttribute("data-theme");
+        const next = current === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        localStorage.setItem("dashboard-theme", next);
+      });
+    }
   }
 
   // ---- data loading -----------------------------------------------------
@@ -840,9 +842,18 @@
     }
   }
 
+  let started = false;
   function start() {
-    document.getElementById("sign-out").hidden = false;
-    document.getElementById("sign-out").addEventListener("click", () => AUTH.signOut());
+    if (started) {
+      refresh();
+      return;
+    }
+    started = true;
+    const signOutBtn = document.getElementById("sign-out");
+    if (signOutBtn) {
+      signOutBtn.hidden = false;
+      signOutBtn.addEventListener("click", () => AUTH.signOut());
+    }
     const windowSelect = document.getElementById("window");
     if (windowSelect) windowSelect.addEventListener("change", refresh);
     const trailsCheckbox = document.getElementById("trails");
@@ -852,8 +863,11 @@
     // Was a hardcoded "90s" that drifted out of sync when REFRESH_MS was
     // tuned (90s -> 120s -> 5min) - compute it instead so it can't drift again.
     const refreshMin = CONFIG.REFRESH_MS / 60_000;
-    document.getElementById("refresh-note").textContent =
-      `Auto-refreshes every ${refreshMin < 1 ? `${CONFIG.REFRESH_MS / 1000}s` : `${refreshMin} min`} (paused while this tab is hidden)`;
+    const refreshNote = document.getElementById("refresh-note");
+    if (refreshNote) {
+      refreshNote.textContent =
+        `Auto-refreshes every ${refreshMin < 1 ? `${CONFIG.REFRESH_MS / 1000}s` : `${refreshMin} min`} (paused while this tab is hidden)`;
+    }
     // Pauses while the tab is hidden instead of polling forever in the
     // background - see loading.js's pollWhileVisible() for why.
     LOADING.pollWhileVisible(refresh, CONFIG.REFRESH_MS);
