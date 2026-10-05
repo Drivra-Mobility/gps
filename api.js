@@ -581,9 +581,23 @@ const API = (() => {
   // never legitimately match both, but if that ever changes, "in for
   // service" is the more decision-relevant state to surface than "at the
   // yard."
+  function parseDate(val) {
+    if (!val) return null;
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    let s = String(val).trim();
+    if (!s) return null;
+    // If date string has no timezone indicator (Z or +/-HH:MM), treat as UTC
+    if (!s.endsWith("Z") && !/[+-]\d{2}(:?\d{2})?$/.test(s)) {
+      s = s.replace(" ", "T") + "Z";
+    }
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
   function classify(row) {
-    if (!row.device_datetime) return "offline";
-    const ageMin = (Date.now() - new Date(row.device_datetime).getTime()) / 60000;
+    const dt = parseDate(row.polled_at || row.device_datetime);
+    if (!dt) return "offline";
+    const ageMin = (Date.now() - dt.getTime()) / 60000;
     if (ageMin > CONFIG.STALE_MINUTES) return "offline";
     if (GEO.isWithinMaintenance(row.latitude, row.longitude)) return "maintenance";
     if (GEO.isWithinParking(row.latitude, row.longitude)) return "parked";
@@ -615,11 +629,10 @@ const API = (() => {
       outside_ktm: "Outside KTM",
     };
 
-    const ageMin = row.device_datetime
-      ? (Date.now() - new Date(row.device_datetime).getTime()) / 60000
-      : Infinity;
+    const dt = parseDate(row.polled_at || row.device_datetime);
+    const ageMin = dt ? (Date.now() - dt.getTime()) / 60000 : Infinity;
 
-    if (!row.device_datetime || ageMin > CONFIG.STALE_MINUTES) {
+    if (!dt || ageMin > CONFIG.STALE_MINUTES) {
       return {
         zone,
         zoneLabel: zoneLabels[zone] || "In KTM",
@@ -668,9 +681,10 @@ const API = (() => {
     };
   }
 
-  function ageSeconds(deviceDatetime) {
-    if (!deviceDatetime) return null;
-    return Math.max(0, (Date.now() - new Date(deviceDatetime).getTime()) / 1000);
+  function ageSeconds(deviceDatetime, polledAt) {
+    const dt = parseDate(polledAt || deviceDatetime);
+    if (!dt) return null;
+    return Math.max(0, (Date.now() - dt.getTime()) / 1000);
   }
 
   // Distance, average/max speed, and moving-time share for one vehicle's
@@ -775,6 +789,7 @@ const API = (() => {
     classifyState,
     classifyDetailed,
     ageSeconds,
+    parseDate,
     vehicleMetrics,
     fleetTimeSeries,
     stateDurationFromHistory,

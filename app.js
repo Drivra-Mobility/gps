@@ -120,31 +120,31 @@
           : API.fetchHistoryDelta(lastDurationMaxPolledAt),
         needsSlowRefresh
           ? API.fetchVehicleDriverMappings().catch((err) => {
-              console.warn("Failed fetching driver mappings", err);
-              return [];
-            })
+            console.warn("Failed fetching driver mappings", err);
+            return [];
+          })
           : Promise.resolve(null),
         // Manually-maintained, same infrequent-change cadence as driver
         // mappings - no reason to refresh it any faster.
         needsSlowRefresh
           ? API.fetchVehicleAttributes().catch((err) => {
-              console.warn("Failed fetching attributes", err);
-              return [];
-            })
+            console.warn("Failed fetching attributes", err);
+            return [];
+          })
           : Promise.resolve(null),
         needsSlowRefresh
           ? API.fetchDailyMetrics({ startDate: today, endDate: today }).catch((err) => {
-              console.warn("Failed fetching daily metrics", err);
-              return [];
-            })
+            console.warn("Failed fetching daily metrics", err);
+            return [];
+          })
           : Promise.resolve(null),
         // vehicle_revenue_day_metrics has no cache layer (unlike day_metrics
         // above, ~15min behind via fleet.*_cache) - always fully live.
         needsSlowRefresh
           ? API.fetchVehicleRevenueDailyMetrics({ startDate: today, endDate: today }).catch((err) => {
-              console.warn("Failed fetching revenue metrics", err);
-              return [];
-            })
+            console.warn("Failed fetching revenue metrics", err);
+            return [];
+          })
           : Promise.resolve(null),
       ]);
 
@@ -319,7 +319,10 @@
     updateFilterUI();
 
     const newest = latestRows
-      .map((r) => (r.device_datetime ? new Date(r.device_datetime).getTime() : 0))
+      .map((r) => {
+        const dt = API.parseDate(r.polled_at || r.device_datetime);
+        return dt ? dt.getTime() : 0;
+      })
       .reduce((a, b) => Math.max(a, b), 0);
     const freshEl = document.getElementById("freshness");
     if (newest && freshEl) {

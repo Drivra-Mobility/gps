@@ -188,7 +188,7 @@ const MAP = (() => {
     rows.push(
       ["Speed", `${Math.round(row.speed || 0)} km/h`],
       ["Ignition", row.ignition || "—"],
-      ["Last report", row.device_datetime ? new Date(row.device_datetime).toLocaleString() : "—"]
+      ["Last report", (row.polled_at || row.device_datetime) ? (window.API && API.parseDate ? API.parseDate(row.polled_at || row.device_datetime) : new Date(row.polled_at || row.device_datetime)).toLocaleString() : "—"]
     );
     const battery = Number((row.raw || {}).battery_percentage);
     if (Number.isFinite(battery)) rows.push(["Battery", `${Math.round(battery)}%`]);

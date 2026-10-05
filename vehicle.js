@@ -150,7 +150,7 @@
     document.getElementById("kpi-maxspeed").textContent = m.maxSpeedKmh ? fmtSpeed(m.maxSpeedKmh) : "—";
     document.getElementById("kpi-movingpct").textContent = fmtPct(m.movingPct);
 
-    const ageSec = API.ageSeconds(latest.device_datetime);
+    const ageSec = API.ageSeconds(latest.device_datetime, latest.polled_at);
     const freshEl = document.getElementById("freshness");
     freshEl.textContent = `last report: ${fmtAge(ageSec)}`;
     freshEl.classList.toggle("is-stale", ageSec != null && ageSec > CONFIG.STALE_MINUTES * 60);
