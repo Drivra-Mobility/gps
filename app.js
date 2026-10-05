@@ -320,8 +320,10 @@
 
     const newest = latestRows
       .map((r) => {
-        const dt = API.parseDate(r.polled_at || r.device_datetime);
-        return dt ? dt.getTime() : 0;
+        const raw = r.polled_at || r.device_datetime;
+        if (!raw) return 0;
+        const dt = typeof API !== "undefined" && typeof API.parseDate === "function" ? API.parseDate(raw) : new Date(raw);
+        return dt && !isNaN(dt.getTime()) ? dt.getTime() : 0;
       })
       .reduce((a, b) => Math.max(a, b), 0);
     const freshEl = document.getElementById("freshness");
