@@ -244,18 +244,23 @@ const API = (() => {
   }
 
   async function saveMaintenanceVerification(record) {
+    const sanitized = {
+      ...record,
+      duration_seconds: Math.round(Number(record.duration_seconds) || 0),
+    };
     const local = JSON.parse(localStorage.getItem(LOCAL_MAINTENANCE_STORAGE_KEY) || "{}");
-    local[record.visit_key] = record;
+    local[sanitized.visit_key] = sanitized;
     localStorage.setItem(LOCAL_MAINTENANCE_STORAGE_KEY, JSON.stringify(local));
 
     try {
-      await AUTH.client
+      const { error } = await AUTH.client
         .from("vehicle_maintenance_records")
-        .upsert(record, { onConflict: "visit_key" });
-    } catch {
-      // Supabase table fallback
+        .upsert(sanitized, { onConflict: "visit_key" });
+      if (error) console.error("Supabase maintenance record save error:", error);
+    } catch (err) {
+      console.error("Supabase table save fallback:", err);
     }
-    return record;
+    return sanitized;
   }
 
   async function deleteMaintenanceVerification(visitKey) {
