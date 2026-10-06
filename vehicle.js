@@ -291,7 +291,7 @@
       sTd.textContent = displayStatus;
       const spTd = document.createElement("td");
       spTd.className = "num";
-      spTd.textContent = `${Math.round(r.speed || 0)} km/h`;
+      spTd.textContent = displayStatus === "Idle" ? "—" : `${Math.round(r.speed || 0)} km/h`;
       const hopTd = document.createElement("td");
       hopTd.className = "num";
       hopTd.textContent = hopM > 0 ? `${Math.round(hopM)} m` : "—";
