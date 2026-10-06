@@ -191,7 +191,11 @@
   }
 
   function rowDetailed(row) {
-    return API.classifyDetailed(row, durationGrouped.get(row.imei_no) || []);
+    const imei = row.imei_no;
+    const history = (grouped.get(imei) && grouped.get(imei).length > (durationGrouped.get(imei) || []).length)
+      ? grouped.get(imei)
+      : (durationGrouped.get(imei) || []);
+    return API.classifyDetailed(row, history);
   }
 
   function driverName(imei) {
@@ -202,7 +206,7 @@
   // ---- Geofence & Status Matrix KPIs ---------------------------------
 
   function renderKpis() {
-    // 1. Zone-first matrix (Row 1)
+    // 1. Zone breakdown (Maintenance, Parking, In KTM, Outside KTM)
     const zoneMatrix = {
       maintenance: { total: 0, idle: 0, st_idle: 0, lt_idle: 0, offline: 0, moving: 0, low_speed: 0, high_speed: 0 },
       parking: { total: 0, idle: 0, st_idle: 0, lt_idle: 0, offline: 0, moving: 0, low_speed: 0, high_speed: 0 },
@@ -210,12 +214,18 @@
       outside_ktm: { total: 0, idle: 0, st_idle: 0, lt_idle: 0, offline: 0, moving: 0, low_speed: 0, high_speed: 0 },
     };
 
-    // 2. Status-first matrix (Row 2)
+    // 2. Status breakdown (Idle, Offline, Moving)
     const statusMatrix = {
-      idle: { total: 0, maint: 0, park: 0, inktm: 0, outktm: 0 },
+      idle: { total: 0, st: 0, lt: 0, maint: 0, park: 0, inktm: 0, outktm: 0 },
       offline: { total: 0, maint: 0, park: 0, inktm: 0, outktm: 0 },
-      moving: { total: 0, maint: 0, park: 0, inktm: 0, outktm: 0 },
+      moving: { total: 0, low_speed: 0, high_speed: 0, inktm: 0, outktm: 0, maint: 0, park: 0 },
     };
+
+    let totalReporting = 0;
+    let reportingMoving = 0;
+    let reportingIdle = 0;
+    let reportingPark = 0;
+    let reportingMaint = 0;
 
     const detailedList = latestRows.map((r) => ({
       row: r,
@@ -226,6 +236,14 @@
       const zKey = detailed.zone; // maintenance, parking, in_ktm, outside_ktm
       const sKey = detailed.status; // idle, offline, moving
       const subKey = detailed.subStatus; // st_idle, lt_idle, low_speed, high_speed
+
+      if (sKey !== "offline") {
+        totalReporting++;
+        if (sKey === "moving") reportingMoving++;
+        if (sKey === "idle") reportingIdle++;
+        if (zKey === "parking") reportingPark++;
+        if (zKey === "maintenance") reportingMaint++;
+      }
 
       // Zone matrix increment
       const zm = zoneMatrix[zKey];
@@ -252,21 +270,35 @@
         if (sm[zoneShortKey] !== undefined) {
           sm[zoneShortKey]++;
         }
+        if (sKey === "idle") {
+          if (subKey === "st_idle") sm.st++;
+          if (subKey === "lt_idle") sm.lt++;
+        }
+        if (sKey === "moving") {
+          if (subKey === "low_speed") sm.low_speed++;
+          if (subKey === "high_speed") sm.high_speed++;
+          if (zKey === "in_ktm") sm.inktm++;
+          if (zKey === "outside_ktm") sm.outktm++;
+        }
       }
     }
 
-    // --- Populate Zone Grid (Row 1) ---
-    // 1. Maintenance Yard
-    animateNumber(document.getElementById("count-zone-maintenance"), zoneMatrix.maintenance.total);
-    animateNumber(document.getElementById("count-maint-idle"), zoneMatrix.maintenance.idle);
-    animateNumber(document.getElementById("count-maint-st-idle"), zoneMatrix.maintenance.st_idle);
-    animateNumber(document.getElementById("count-maint-lt-idle"), zoneMatrix.maintenance.lt_idle);
-    animateNumber(document.getElementById("count-maint-offline"), zoneMatrix.maintenance.offline);
-    animateNumber(document.getElementById("count-maint-moving"), zoneMatrix.maintenance.moving);
-    animateNumber(document.getElementById("count-maint-low-speed"), zoneMatrix.maintenance.low_speed);
-    animateNumber(document.getElementById("count-maint-high-speed"), zoneMatrix.maintenance.high_speed);
+    // --- Row 1: 4 Cards ---
+    // 1. Reporting Card
+    animateNumber(document.getElementById("count-kpi-reporting"), totalReporting);
+    animateNumber(document.getElementById("count-reporting-moving"), reportingMoving);
+    animateNumber(document.getElementById("count-reporting-idle"), reportingIdle);
+    animateNumber(document.getElementById("count-reporting-park"), reportingPark);
+    animateNumber(document.getElementById("count-reporting-maint"), reportingMaint);
 
-    // 2. Parking Yard
+    // 2. Moving Card
+    animateNumber(document.getElementById("count-status-moving"), statusMatrix.moving.total);
+    animateNumber(document.getElementById("count-moving-low-speed"), statusMatrix.moving.low_speed);
+    animateNumber(document.getElementById("count-moving-high-speed"), statusMatrix.moving.high_speed);
+    animateNumber(document.getElementById("count-moving-inktm"), statusMatrix.moving.inktm);
+    animateNumber(document.getElementById("count-moving-outktm"), statusMatrix.moving.outktm);
+
+    // 3. In Parking Card
     animateNumber(document.getElementById("count-zone-parking"), zoneMatrix.parking.total);
     animateNumber(document.getElementById("count-park-idle"), zoneMatrix.parking.idle);
     animateNumber(document.getElementById("count-park-st-idle"), zoneMatrix.parking.st_idle);
@@ -276,47 +308,28 @@
     animateNumber(document.getElementById("count-park-low-speed"), zoneMatrix.parking.low_speed);
     animateNumber(document.getElementById("count-park-high-speed"), zoneMatrix.parking.high_speed);
 
-    // 3. Inside Kathmandu (In KTM)
-    animateNumber(document.getElementById("count-zone-in_ktm"), zoneMatrix.in_ktm.total);
-    animateNumber(document.getElementById("count-inktm-idle"), zoneMatrix.in_ktm.idle);
-    animateNumber(document.getElementById("count-inktm-st-idle"), zoneMatrix.in_ktm.st_idle);
-    animateNumber(document.getElementById("count-inktm-lt-idle"), zoneMatrix.in_ktm.lt_idle);
-    animateNumber(document.getElementById("count-inktm-offline"), zoneMatrix.in_ktm.offline);
-    animateNumber(document.getElementById("count-inktm-moving"), zoneMatrix.in_ktm.moving);
-    animateNumber(document.getElementById("count-inktm-low-speed"), zoneMatrix.in_ktm.low_speed);
-    animateNumber(document.getElementById("count-inktm-high-speed"), zoneMatrix.in_ktm.high_speed);
+    // 4. In Maintenance Card
+    animateNumber(document.getElementById("count-zone-maintenance"), zoneMatrix.maintenance.total);
+    animateNumber(document.getElementById("count-maint-idle"), zoneMatrix.maintenance.idle);
+    animateNumber(document.getElementById("count-maint-st-idle"), zoneMatrix.maintenance.st_idle);
+    animateNumber(document.getElementById("count-maint-lt-idle"), zoneMatrix.maintenance.lt_idle);
+    animateNumber(document.getElementById("count-maint-offline"), zoneMatrix.maintenance.offline);
+    animateNumber(document.getElementById("count-maint-moving"), zoneMatrix.maintenance.moving);
+    animateNumber(document.getElementById("count-maint-low-speed"), zoneMatrix.maintenance.low_speed);
+    animateNumber(document.getElementById("count-maint-high-speed"), zoneMatrix.maintenance.high_speed);
 
-    // 4. Outside Kathmandu
-    animateNumber(document.getElementById("count-zone-outside_ktm"), zoneMatrix.outside_ktm.total);
-    animateNumber(document.getElementById("count-outktm-idle"), zoneMatrix.outside_ktm.idle);
-    animateNumber(document.getElementById("count-outktm-st-idle"), zoneMatrix.outside_ktm.st_idle);
-    animateNumber(document.getElementById("count-outktm-lt-idle"), zoneMatrix.outside_ktm.lt_idle);
-    animateNumber(document.getElementById("count-outktm-offline"), zoneMatrix.outside_ktm.offline);
-    animateNumber(document.getElementById("count-outktm-moving"), zoneMatrix.outside_ktm.moving);
-    animateNumber(document.getElementById("count-outktm-low-speed"), zoneMatrix.outside_ktm.low_speed);
-    animateNumber(document.getElementById("count-outktm-high-speed"), zoneMatrix.outside_ktm.high_speed);
-
-    // --- Populate Status Grid (Row 2) ---
+    // --- Row 2: 2 Cards ---
     // 1. Idle Card
     animateNumber(document.getElementById("count-status-idle"), statusMatrix.idle.total);
-    animateNumber(document.getElementById("count-status-idle-maint"), statusMatrix.idle.maint);
-    animateNumber(document.getElementById("count-status-idle-park"), statusMatrix.idle.park);
-    animateNumber(document.getElementById("count-status-idle-inktm"), statusMatrix.idle.inktm);
-    animateNumber(document.getElementById("count-status-idle-outktm"), statusMatrix.idle.outktm);
+    animateNumber(document.getElementById("count-idle-st"), statusMatrix.idle.st);
+    animateNumber(document.getElementById("count-idle-lt"), statusMatrix.idle.lt);
 
     // 2. Offline Card
     animateNumber(document.getElementById("count-status-offline"), statusMatrix.offline.total);
-    animateNumber(document.getElementById("count-status-offline-maint"), statusMatrix.offline.maint);
-    animateNumber(document.getElementById("count-status-offline-park"), statusMatrix.offline.park);
-    animateNumber(document.getElementById("count-status-offline-inktm"), statusMatrix.offline.inktm);
-    animateNumber(document.getElementById("count-status-offline-outktm"), statusMatrix.offline.outktm);
-
-    // 3. Moving Card
-    animateNumber(document.getElementById("count-status-moving"), statusMatrix.moving.total);
-    animateNumber(document.getElementById("count-status-moving-maint"), statusMatrix.moving.maint);
-    animateNumber(document.getElementById("count-status-moving-park"), statusMatrix.moving.park);
-    animateNumber(document.getElementById("count-status-moving-inktm"), statusMatrix.moving.inktm);
-    animateNumber(document.getElementById("count-status-moving-outktm"), statusMatrix.moving.outktm);
+    animateNumber(document.getElementById("count-offline-maint"), statusMatrix.offline.maint);
+    animateNumber(document.getElementById("count-offline-park"), statusMatrix.offline.park);
+    animateNumber(document.getElementById("count-offline-inktm"), statusMatrix.offline.inktm);
+    animateNumber(document.getElementById("count-offline-outktm"), statusMatrix.offline.outktm);
 
     updateFilterUI();
 
@@ -339,7 +352,7 @@
   // ---- Interactive Zone & Status Filter Handling -----------------------
 
   function setFilter(type, value) {
-    if (selectedFilter && selectedFilter.type === type && selectedFilter.value === value) {
+    if (!type || (selectedFilter && selectedFilter.type === type && selectedFilter.value === value)) {
       selectedFilter = null;
     } else {
       selectedFilter = { type, value };
@@ -388,30 +401,19 @@
   }
 
   function initZoneFilters() {
+    // Accordion expand/collapse on header click
     document.querySelectorAll(".zone-card").forEach((card) => {
-      card.addEventListener("click", () => {
-        const zone = card.dataset.zone;
-        if (zone) setFilter("zone", zone);
-      });
-      card.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          const zone = card.dataset.zone;
-          if (zone) setFilter("zone", zone);
-        }
-      });
-    });
+      const header = card.querySelector(".zone-card-header");
+      if (header) {
+        header.addEventListener("click", (e) => {
+          card.classList.toggle("is-expanded");
+        });
+      }
 
-    document.querySelectorAll(".status-card").forEach((card) => {
-      card.addEventListener("click", () => {
-        const status = card.dataset.status;
-        if (status) setFilter("status", status);
-      });
       card.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          const status = card.dataset.status;
-          if (status) setFilter("status", status);
+          card.classList.toggle("is-expanded");
         }
       });
     });

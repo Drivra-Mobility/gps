@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..800&display=swap" />
   <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=13" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
 </head>
@@ -28,57 +28,103 @@
         <button type="button" id="clear-filter-btn">Clear filter (Show all)</button>
       </div>
 
-      <!-- Geofence & Operational Status Matrix: Grouped by Geofence (Row 1) and Status (Row 2) -->
-      <section class="zone-matrix-section" aria-label="Fleet Geofence and Status Matrix">
-        <!-- Row 1: 4 Cards by Geofence -->
+      <!-- Geofence & Operational Status Matrix: Row 1 (Reporting, Moving, Parking, Maintenance) & Row 2 (Idle, Offline) -->
+      <section class="zone-matrix-section" aria-label="Fleet Overview and Status Matrix">
+        <!-- Row 1: 4 Cards -->
         <div class="zone-matrix-grid">
-          <!-- 1. Maintenance Yard -->
-          <article class="zone-card" id="card-zone-maintenance" data-zone="maintenance" tabindex="0" role="button"
-            aria-label="Filter by Maintenance zone">
+          <!-- 1. Total Reporting Card -->
+          <article class="zone-card" id="card-kpi-reporting" data-filter="all" tabindex="0" role="button"
+            aria-label="Filter all reporting vehicles">
             <div class="zone-card-header">
               <span class="zone-card-title">
-                <span class="swatch swatch-maintenance" aria-hidden="true"></span> Maintenance
+                <span class="swatch swatch-moving" style="background:#22c55e;" aria-hidden="true"></span> Reporting
               </span>
-              <span class="zone-count-badge" id="count-zone-maintenance">—</span>
+              <div class="zone-card-header-right">
+                <span class="zone-count-badge" id="count-kpi-reporting">—</span>
+                <button class="card-expand-btn" type="button" aria-label="Toggle details">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
             </div>
             <div class="zone-breakdown">
               <div class="zone-subgroup">
                 <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-idle"></span> Idle</span>
-                  <span class="zone-subgroup-count" id="count-maint-idle">—</span>
-                </div>
-                <div class="zone-subgroup-items">
-                  <div class="zone-subitem-row"><span>&le;1 hr (ST Idle)</span><strong id="count-maint-st-idle">—</strong></div>
-                  <div class="zone-subitem-row"><span>&gt;1 hr (LT Idle)</span><strong id="count-maint-lt-idle">—</strong></div>
-                </div>
-              </div>
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-offline"></span> Offline</span>
-                  <span class="zone-subgroup-count" id="count-maint-offline">—</span>
-                </div>
-              </div>
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
                   <span class="zone-subgroup-title-left"><span class="swatch swatch-moving"></span> Moving</span>
-                  <span class="zone-subgroup-count" id="count-maint-moving">—</span>
+                  <span class="zone-subgroup-count" id="count-reporting-moving">—</span>
                 </div>
-                <div class="zone-subgroup-items">
-                  <div class="zone-subitem-row"><span>Low Speed</span><strong id="count-maint-low-speed">—</strong></div>
-                  <div class="zone-subitem-row"><span>High Speed</span><strong id="count-maint-high-speed">—</strong></div>
+              </div>
+              <div class="zone-subgroup">
+                <div class="zone-subgroup-title">
+                  <span class="zone-subgroup-title-left"><span class="swatch swatch-idle"></span> Idle</span>
+                  <span class="zone-subgroup-count" id="count-reporting-idle">—</span>
+                </div>
+              </div>
+              <div class="zone-subgroup">
+                <div class="zone-subgroup-title">
+                  <span class="zone-subgroup-title-left"><span class="swatch swatch-parked"></span> In Parking</span>
+                  <span class="zone-subgroup-count" id="count-reporting-park">—</span>
+                </div>
+              </div>
+              <div class="zone-subgroup">
+                <div class="zone-subgroup-title">
+                  <span class="zone-subgroup-title-left"><span class="swatch swatch-maintenance"></span> In Maintenance</span>
+                  <span class="zone-subgroup-count" id="count-reporting-maint">—</span>
                 </div>
               </div>
             </div>
           </article>
 
-          <!-- 2. Parking Yard -->
+          <!-- 2. Moving Card -->
+          <article class="zone-card status-card" id="card-status-moving" data-status="moving" tabindex="0" role="button"
+            aria-label="Filter by Moving status">
+            <div class="zone-card-header">
+              <span class="zone-card-title">
+                <span class="swatch swatch-moving" aria-hidden="true"></span> Moving
+              </span>
+              <div class="zone-card-header-right">
+                <span class="zone-count-badge" id="count-status-moving">—</span>
+                <button class="card-expand-btn" type="button" aria-label="Toggle details">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
+            </div>
+            <div class="zone-breakdown">
+              <!-- Speed Subcategory -->
+              <div class="zone-subgroup">
+                <div class="zone-subgroup-title">
+                  <span class="zone-subgroup-title-left">Speed</span>
+                </div>
+                <div class="zone-subgroup-items">
+                  <div class="zone-subitem-row"><span>Low Speed (&le;40 km/h)</span><strong id="count-moving-low-speed">—</strong></div>
+                  <div class="zone-subitem-row"><span>High Speed (&gt;40 km/h)</span><strong id="count-moving-high-speed">—</strong></div>
+                </div>
+              </div>
+              <!-- Location Subcategory -->
+              <div class="zone-subgroup">
+                <div class="zone-subgroup-title">
+                  <span class="zone-subgroup-title-left">Location</span>
+                </div>
+                <div class="zone-subgroup-items">
+                  <div class="zone-subitem-row"><span>In KTM</span><strong id="count-moving-inktm">—</strong></div>
+                  <div class="zone-subitem-row"><span>Outside KTM</span><strong id="count-moving-outktm">—</strong></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 3. In Parking Card -->
           <article class="zone-card" id="card-zone-parking" data-zone="parking" tabindex="0" role="button"
             aria-label="Filter by Parking zone">
             <div class="zone-card-header">
               <span class="zone-card-title">
-                <span class="swatch swatch-parked" aria-hidden="true"></span> Parking
+                <span class="swatch swatch-parked" aria-hidden="true"></span> In Parking
               </span>
-              <span class="zone-count-badge" id="count-zone-parking">—</span>
+              <div class="zone-card-header-right">
+                <span class="zone-count-badge" id="count-zone-parking">—</span>
+                <button class="card-expand-btn" type="button" aria-label="Toggle details">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
             </div>
             <div class="zone-breakdown">
               <div class="zone-subgroup">
@@ -110,87 +156,52 @@
             </div>
           </article>
 
-          <!-- 3. Inside Kathmandu -->
-          <article class="zone-card" id="card-zone-in_ktm" data-zone="in_ktm" tabindex="0" role="button"
-            aria-label="Filter by Inside Kathmandu zone">
+          <!-- 4. In Maintenance Card -->
+          <article class="zone-card" id="card-zone-maintenance" data-zone="maintenance" tabindex="0" role="button"
+            aria-label="Filter by Maintenance zone">
             <div class="zone-card-header">
               <span class="zone-card-title">
-                <span class="swatch swatch-moving" style="background:#3987e5;" aria-hidden="true"></span> In KTM
-                <span class="info-tip" tabindex="0" data-tooltip="Not in Maintenance and Parking" aria-label="Not in Maintenance and Parking"></span>
+                <span class="swatch swatch-maintenance" aria-hidden="true"></span> In Maintenance
               </span>
-              <span class="zone-count-badge" id="count-zone-in_ktm">—</span>
+              <div class="zone-card-header-right">
+                <span class="zone-count-badge" id="count-zone-maintenance">—</span>
+                <button class="card-expand-btn" type="button" aria-label="Toggle details">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
             </div>
             <div class="zone-breakdown">
               <div class="zone-subgroup">
                 <div class="zone-subgroup-title">
                   <span class="zone-subgroup-title-left"><span class="swatch swatch-idle"></span> Idle</span>
-                  <span class="zone-subgroup-count" id="count-inktm-idle">—</span>
+                  <span class="zone-subgroup-count" id="count-maint-idle">—</span>
                 </div>
                 <div class="zone-subgroup-items">
-                  <div class="zone-subitem-row"><span>&le;1 hr (ST Idle)</span><strong id="count-inktm-st-idle">—</strong></div>
-                  <div class="zone-subitem-row"><span>&gt;1 hr (LT Idle)</span><strong id="count-inktm-lt-idle">—</strong></div>
+                  <div class="zone-subitem-row"><span>&le;1 hr (ST Idle)</span><strong id="count-maint-st-idle">—</strong></div>
+                  <div class="zone-subitem-row"><span>&gt;1 hr (LT Idle)</span><strong id="count-maint-lt-idle">—</strong></div>
                 </div>
               </div>
               <div class="zone-subgroup">
                 <div class="zone-subgroup-title">
                   <span class="zone-subgroup-title-left"><span class="swatch swatch-offline"></span> Offline</span>
-                  <span class="zone-subgroup-count" id="count-inktm-offline">—</span>
+                  <span class="zone-subgroup-count" id="count-maint-offline">—</span>
                 </div>
               </div>
               <div class="zone-subgroup">
                 <div class="zone-subgroup-title">
                   <span class="zone-subgroup-title-left"><span class="swatch swatch-moving"></span> Moving</span>
-                  <span class="zone-subgroup-count" id="count-inktm-moving">—</span>
+                  <span class="zone-subgroup-count" id="count-maint-moving">—</span>
                 </div>
                 <div class="zone-subgroup-items">
-                  <div class="zone-subitem-row"><span>Low Speed</span><strong id="count-inktm-low-speed">—</strong></div>
-                  <div class="zone-subitem-row"><span>High Speed</span><strong id="count-inktm-high-speed">—</strong></div>
-                </div>
-              </div>
-            </div>
-          </article>
-
-          <!-- 4. Outside Kathmandu -->
-          <article class="zone-card" id="card-zone-outside_ktm" data-zone="outside_ktm" tabindex="0" role="button"
-            aria-label="Filter by Outside Kathmandu zone">
-            <div class="zone-card-header">
-              <span class="zone-card-title">
-                <span class="swatch swatch-inactive" aria-hidden="true"></span> Outside KTM
-              </span>
-              <span class="zone-count-badge" id="count-zone-outside_ktm">—</span>
-            </div>
-            <div class="zone-breakdown">
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-idle"></span> Idle</span>
-                  <span class="zone-subgroup-count" id="count-outktm-idle">—</span>
-                </div>
-                <div class="zone-subgroup-items">
-                  <div class="zone-subitem-row"><span>&le;1 hr (ST Idle)</span><strong id="count-outktm-st-idle">—</strong></div>
-                  <div class="zone-subitem-row"><span>&gt;1 hr (LT Idle)</span><strong id="count-outktm-lt-idle">—</strong></div>
-                </div>
-              </div>
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-offline"></span> Offline</span>
-                  <span class="zone-subgroup-count" id="count-outktm-offline">—</span>
-                </div>
-              </div>
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-moving"></span> Moving</span>
-                  <span class="zone-subgroup-count" id="count-outktm-moving">—</span>
-                </div>
-                <div class="zone-subgroup-items">
-                  <div class="zone-subitem-row"><span>Low Speed</span><strong id="count-outktm-low-speed">—</strong></div>
-                  <div class="zone-subitem-row"><span>High Speed</span><strong id="count-outktm-high-speed">—</strong></div>
+                  <div class="zone-subitem-row"><span>Low Speed</span><strong id="count-maint-low-speed">—</strong></div>
+                  <div class="zone-subitem-row"><span>High Speed</span><strong id="count-maint-high-speed">—</strong></div>
                 </div>
               </div>
             </div>
           </article>
         </div>
 
-        <!-- Row 2: 3 Cards by Operational Status -->
+        <!-- Row 2: 2 Cards (Idle & Offline) -->
         <div class="status-matrix-grid">
           <!-- 1. Idle Card -->
           <article class="zone-card status-card" id="card-status-idle" data-status="idle" tabindex="0" role="button"
@@ -199,35 +210,22 @@
               <span class="zone-card-title">
                 <span class="swatch swatch-idle" aria-hidden="true"></span> Idle
               </span>
-              <span class="zone-count-badge" id="count-status-idle">—</span>
+              <div class="zone-card-header-right">
+                <span class="zone-count-badge" id="count-status-idle">—</span>
+                <button class="card-expand-btn" type="button" aria-label="Toggle details">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
             </div>
             <div class="zone-breakdown">
-              <!-- Maintenance in Idle -->
+              <!-- Duration Subcategory -->
               <div class="zone-subgroup">
                 <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-maintenance"></span> Maintenance</span>
-                  <span class="zone-subgroup-count" id="count-status-idle-maint">—</span>
+                  <span class="zone-subgroup-title-left">Duration</span>
                 </div>
-              </div>
-              <!-- Parking in Idle -->
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-parked"></span> Parking</span>
-                  <span class="zone-subgroup-count" id="count-status-idle-park">—</span>
-                </div>
-              </div>
-              <!-- In KTM in Idle -->
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-moving" style="background:#3987e5;"></span> In KTM</span>
-                  <span class="zone-subgroup-count" id="count-status-idle-inktm">—</span>
-                </div>
-              </div>
-              <!-- Outside KTM in Idle -->
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-inactive"></span> Outside KTM</span>
-                  <span class="zone-subgroup-count" id="count-status-idle-outktm">—</span>
+                <div class="zone-subgroup-items">
+                  <div class="zone-subitem-row"><span>Short-term (&le;1h)</span><strong id="count-idle-st">—</strong></div>
+                  <div class="zone-subitem-row"><span>Long-term (&gt;1h)</span><strong id="count-idle-lt">—</strong></div>
                 </div>
               </div>
             </div>
@@ -240,76 +238,36 @@
               <span class="zone-card-title">
                 <span class="swatch swatch-offline" aria-hidden="true"></span> Offline
               </span>
-              <span class="zone-count-badge" id="count-status-offline">—</span>
+              <div class="zone-card-header-right">
+                <span class="zone-count-badge" id="count-status-offline">—</span>
+                <button class="card-expand-btn" type="button" aria-label="Toggle details">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+              </div>
             </div>
             <div class="zone-breakdown">
-              <!-- Maintenance in Offline -->
               <div class="zone-subgroup">
                 <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-maintenance"></span> Maintenance</span>
-                  <span class="zone-subgroup-count" id="count-status-offline-maint">—</span>
+                  <span class="zone-subgroup-title-left"><span class="swatch swatch-maintenance"></span> In Maintenance</span>
+                  <span class="zone-subgroup-count" id="count-offline-maint">—</span>
                 </div>
               </div>
-              <!-- Parking in Offline -->
               <div class="zone-subgroup">
                 <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-parked"></span> Parking</span>
-                  <span class="zone-subgroup-count" id="count-status-offline-park">—</span>
+                  <span class="zone-subgroup-title-left"><span class="swatch swatch-parked"></span> In Parking</span>
+                  <span class="zone-subgroup-count" id="count-offline-park">—</span>
                 </div>
               </div>
-              <!-- In KTM in Offline -->
               <div class="zone-subgroup">
                 <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-moving" style="background:#3987e5;"></span> In KTM</span>
-                  <span class="zone-subgroup-count" id="count-status-offline-inktm">—</span>
+                  <span class="zone-subgroup-title-left"><span class="swatch swatch-moving" style="background:#3987e5;"></span> Others (In KTM)</span>
+                  <span class="zone-subgroup-count" id="count-offline-inktm">—</span>
                 </div>
               </div>
-              <!-- Outside KTM in Offline -->
               <div class="zone-subgroup">
                 <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-inactive"></span> Outside KTM</span>
-                  <span class="zone-subgroup-count" id="count-status-offline-outktm">—</span>
-                </div>
-              </div>
-            </div>
-          </article>
-
-          <!-- 3. Moving Card -->
-          <article class="zone-card status-card" id="card-status-moving" data-status="moving" tabindex="0" role="button"
-            aria-label="Filter by Moving status">
-            <div class="zone-card-header">
-              <span class="zone-card-title">
-                <span class="swatch swatch-moving" aria-hidden="true"></span> Moving
-              </span>
-              <span class="zone-count-badge" id="count-status-moving">—</span>
-            </div>
-            <div class="zone-breakdown">
-              <!-- Maintenance in Moving -->
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-maintenance"></span> Maintenance</span>
-                  <span class="zone-subgroup-count" id="count-status-moving-maint">—</span>
-                </div>
-              </div>
-              <!-- Parking in Moving -->
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-parked"></span> Parking</span>
-                  <span class="zone-subgroup-count" id="count-status-moving-park">—</span>
-                </div>
-              </div>
-              <!-- In KTM in Moving -->
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-moving" style="background:#3987e5;"></span> In KTM</span>
-                  <span class="zone-subgroup-count" id="count-status-moving-inktm">—</span>
-                </div>
-              </div>
-              <!-- Outside KTM in Moving -->
-              <div class="zone-subgroup">
-                <div class="zone-subgroup-title">
-                  <span class="zone-subgroup-title-left"><span class="swatch swatch-inactive"></span> Outside KTM</span>
-                  <span class="zone-subgroup-count" id="count-status-moving-outktm">—</span>
+                  <span class="zone-subgroup-title-left"><span class="swatch swatch-inactive"></span> Others (Outside KTM)</span>
+                  <span class="zone-subgroup-count" id="count-offline-outktm">—</span>
                 </div>
               </div>
             </div>
@@ -474,15 +432,15 @@
   </div>
 
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script src="config.js?v=4"></script>
-  <script src="geo.js?v=4"></script>
-  <script src="chart.js?v=4"></script>
-  <script src="map.js?v=4"></script>
-  <script src="auth.js?v=4"></script>
-  <script src="api.js?v=4"></script>
-  <script src="loading.js?v=4"></script>
-  <script src="nav.js?v=4"></script>
-  <script src="app.js?v=4"></script>
+  <script src="config.js?v=7"></script>
+  <script src="geo.js?v=7"></script>
+  <script src="chart.js?v=7"></script>
+  <script src="map.js?v=7"></script>
+  <script src="auth.js?v=7"></script>
+  <script src="api.js?v=7"></script>
+  <script src="loading.js?v=7"></script>
+  <script src="nav.js?v=7"></script>
+  <script src="app.js?v=12"></script>
 </body>
 
 </html>

@@ -132,8 +132,11 @@
     const cleanDevStatus = rawDevStatus === "INACTIVE" || rawDevStatus === "STOP" || rawDevStatus === "STOPPED"
       ? "Idle"
       : latest.status;
+    const { seconds, sinceStart } = API.stateDurationFromHistory(durationRows || [], "idle");
+    const durStr = API.formatExactDuration(seconds, sinceStart);
+    const idleDurationStr = state === "idle" && seconds > 0 ? ` · idle for ${durStr}` : "";
     document.getElementById("kpi-state-note").textContent = latest.status
-      ? `device status: ${cleanDevStatus}`
+      ? `device status: ${cleanDevStatus}${idleDurationStr}`
       : "—";
 
     document.getElementById("kpi-speed").textContent =

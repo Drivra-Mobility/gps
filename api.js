@@ -686,6 +686,21 @@ const API = (() => {
     return classify(row);
   }
 
+  function formatExactDuration(seconds, sinceStart = false) {
+    if (!seconds || seconds <= 0) return "< 1m";
+    const totalMin = Math.round(seconds / 60);
+    if (totalMin < 60) {
+      return `${Math.max(1, totalMin)}m${sinceStart ? "+" : ""}`;
+    }
+    const d = Math.floor(totalMin / 1440);
+    const h = Math.floor((totalMin % 1440) / 60);
+    const m = totalMin % 60;
+    if (d > 0) {
+      return h > 0 ? `${d}d ${h}h${sinceStart ? "+" : ""}` : `${d}d${sinceStart ? "+" : ""}`;
+    }
+    return m > 0 ? `${h}h ${m}m${sinceStart ? "+" : ""}` : `${h}h${sinceStart ? "+" : ""}`;
+  }
+
   // Multi-tier classification into Geofence (Maintenance, Parking, In KTM, Outside KTM)
   // and Status (Idle -> ST/LT Idle, Offline, Moving -> Low/High Speed).
   function classifyDetailed(row, durationHistoryRows) {
@@ -733,18 +748,22 @@ const API = (() => {
       };
     }
 
-    // Vehicle is Idle (no more 'inactive' status)
-    const { seconds } = stateDurationFromHistory(durationHistoryRows || [], "idle");
-    const idleMinutes = seconds > 0 ? seconds / 60 : ageMin;
+    // Vehicle is Idle
+    const { seconds, sinceStart } = stateDurationFromHistory(durationHistoryRows || [], "idle");
+    const idleSeconds = seconds > 0 ? seconds : (dt ? Math.max(0, (Date.now() - dt.getTime()) / 1000) : 0);
+    const idleMinutes = idleSeconds / 60;
     const isST = idleMinutes <= (CONFIG.IDLE_ST_THRESHOLD_MINUTES || 60);
     const subStatus = isST ? "st_idle" : "lt_idle";
+    const durationStr = formatExactDuration(idleSeconds, sinceStart);
     return {
       zone,
       zoneLabel: zoneLabels[zone] || "In KTM",
       status: "idle",
       subStatus,
       statusLabel: "Idle",
-      subStatusLabel: isST ? "ST Idle (≤1h)" : "LT Idle (>1h)",
+      subStatusLabel: `${isST ? "ST Idle" : "LT Idle"} (${durationStr})`,
+      idleDurationLabel: durationStr,
+      idleSeconds,
       speed: 0,
       idleMinutes,
       state: "idle",
@@ -865,5 +884,6 @@ const API = (() => {
     vehicleMetrics,
     fleetTimeSeries,
     stateDurationFromHistory,
+    formatExactDuration,
   };
 })();

@@ -1662,20 +1662,33 @@ tbody tr.is-selected {
 .zone-matrix-section {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-bottom: var(--gap);
+  gap: 12px;
+  margin-bottom: 20px;
 }
 
 .zone-matrix-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
 .status-matrix-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 1100px) {
+  .zone-matrix-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .zone-matrix-grid,
+  .status-matrix-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .zone-card,
@@ -1683,14 +1696,17 @@ tbody tr.is-selected {
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 16px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   position: relative;
   user-select: none;
+  -webkit-user-select: none;
+  align-self: start;
+  height: auto;
 }
 
 .zone-card:hover,
@@ -1727,35 +1743,64 @@ tbody tr.is-selected {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-bottom: none;
+  padding-bottom: 0;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.zone-card.is-expanded .zone-card-header {
   border-bottom: 1px solid var(--border);
   padding-bottom: 8px;
 }
 
-.zone-card-title {
-  font-size: 14px;
-  font-weight: 800; /* Bold as specified in sheet */
-  color: var(--text-primary);
+.zone-card-header-right {
   display: flex;
   align-items: center;
-  gap: 6px;
-  letter-spacing: -0.01em;
+  gap: 8px;
 }
 
-.zone-count-badge {
-  font-size: 18px;
-  font-weight: 800;
+.card-expand-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 3px;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: transform 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.card-expand-btn:hover {
   color: var(--text-primary);
-  background: var(--surface-2, rgba(128, 128, 128, 0.1));
-  padding: 2px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+  background: var(--surface-2, rgba(128, 128, 128, 0.12));
+  border-color: var(--border);
+}
+
+.zone-card.is-expanded .card-expand-btn svg {
+  transform: rotate(180deg);
+}
+
+.zone-card.is-expanded,
+.status-card.is-expanded {
+  align-self: stretch;
+  min-height: auto;
 }
 
 .zone-breakdown {
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
+  animation: fadeIn 0.15s ease;
+  flex: 1;
+}
+
+.zone-card.is-expanded .zone-breakdown {
+  display: flex;
 }
 
 .zone-subgroup {
