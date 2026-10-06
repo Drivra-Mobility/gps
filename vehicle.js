@@ -128,8 +128,12 @@
     span.className = `state state-${state}`;
     span.textContent = MAP.STATE_LABEL[state];
     stateEl.appendChild(span);
+    const rawDevStatus = (latest.status || "").trim().toUpperCase();
+    const cleanDevStatus = rawDevStatus === "INACTIVE" || rawDevStatus === "STOP" || rawDevStatus === "STOPPED"
+      ? "Idle"
+      : latest.status;
     document.getElementById("kpi-state-note").textContent = latest.status
-      ? `device status: ${latest.status}`
+      ? `device status: ${cleanDevStatus}`
       : "—";
 
     document.getElementById("kpi-speed").textContent =
@@ -280,7 +284,11 @@
       const tTd = document.createElement("td");
       tTd.textContent = r.polled_at ? new Date(r.polled_at).toLocaleString() : "—";
       const sTd = document.createElement("td");
-      sTd.textContent = r.status || "—";
+      const rawStatus = (r.status || "").trim().toUpperCase();
+      const displayStatus = rawStatus === "INACTIVE" || rawStatus === "STOP" || rawStatus === "STOPPED"
+        ? "Idle"
+        : (r.status || "—");
+      sTd.textContent = displayStatus;
       const spTd = document.createElement("td");
       spTd.className = "num";
       spTd.textContent = `${Math.round(r.speed || 0)} km/h`;
