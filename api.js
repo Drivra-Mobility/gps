@@ -165,18 +165,59 @@ const API = (() => {
   // for no lower bound). endDate bounds how far forward (inclusive; or null
   // for no upper bound - a visit is included if it STARTED on or before
   // endDate, even if still ongoing past it).
+  async function fetchMaintenanceVisitsSingle({ imei = null, startDate = null, endDate = null } = {}) {
+    try {
+      const { data, error } = await AUTH.client.rpc("vehicle_maintenance_visits", {
+        p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
+        p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
+        p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
+        p_imei: imei,
+        p_since: startDate,
+        p_until: endDate,
+        p_tz: CONFIG.TIMEZONE,
+      });
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      if (startDate && endDate && startDate !== endDate) {
+        const subChunks = splitDateRangeIntoChunks(startDate, endDate, 2);
+        if (subChunks.length > 1) {
+          const subResults = [];
+          for (const sc of subChunks) {
+            const subData = await fetchMaintenanceVisitsSingle({ imei, startDate: sc.startDate, endDate: sc.endDate });
+            subResults.push(...subData);
+          }
+          return subResults;
+        }
+      }
+      throw err;
+    }
+  }
+
+  // Chunks long date ranges into 4-day slices to prevent PostgreSQL 57014 statement timeouts
   async function fetchMaintenanceVisits({ imei = null, startDate = null, endDate = null } = {}) {
-    const { data, error } = await AUTH.client.rpc("vehicle_maintenance_visits", {
-      p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
-      p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
-      p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
-      p_imei: imei,
-      p_since: startDate,
-      p_until: endDate,
-      p_tz: CONFIG.TIMEZONE,
-    });
-    if (error) throw error;
-    return data;
+    if (!startDate) {
+      return fetchMaintenanceVisitsSingle({ imei, startDate, endDate });
+    }
+    const resolvedEnd = endDate || new Date().toISOString().slice(0, 10);
+    const chunks = splitDateRangeIntoChunks(startDate, resolvedEnd, 4);
+    if (chunks.length <= 1) {
+      return fetchMaintenanceVisitsSingle({ imei, startDate, endDate: resolvedEnd });
+    }
+
+    const merged = [];
+    const seen = new Set();
+    for (const c of chunks) {
+      const batch = await fetchMaintenanceVisitsSingle({ imei, startDate: c.startDate, endDate: c.endDate });
+      for (const row of (batch || [])) {
+        const key = row.visit_key || `${row.imei_no}_${row.visit_start}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          merged.push(row);
+        }
+      }
+    }
+    return merged;
   }
 
   // Operator verification state (confirmed maintenance vs. marked as not maintenance).
