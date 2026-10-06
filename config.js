@@ -38,7 +38,7 @@ const CONFIG = {
   // way PARK_RADIUS_M was derived.
   // Garow Nepal workshop compound (building 182 / inner alley, slightly nudged NE)
   MAINTENANCE_CENTER: { lat: 27.73675, lon: 85.34195 },
-  MAINTENANCE_RADIUS_M: 40, // 40m radius covers the Garow building & scooter while staying clear of Ring Road
+  MAINTENANCE_RADIUS_M: 80, // 80m radius covers Garow workshop compound and accounts for urban GPS drift
 
   // A third geofence: Kathmandu valley urban boundary.
   // Vehicles outside both parking/maintenance are classified as In KTM vs Outside KTM.
