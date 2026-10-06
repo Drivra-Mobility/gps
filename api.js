@@ -602,6 +602,12 @@ const API = (() => {
     return d1 || d2;
   }
 
+  function isStoppedStatus(row) {
+    if (!row) return false;
+    const raw = String(row.status || (row.raw && row.raw.status) || "").trim().toUpperCase();
+    return raw === "INACTIVE" || raw === "STOP" || raw === "STOPPED" || raw === "PARKED";
+  }
+
   function classify(row) {
     const dt = rowTimestamp(row);
     if (!dt) return "offline";
@@ -609,7 +615,8 @@ const API = (() => {
     if (ageMin > CONFIG.STALE_MINUTES) return "offline";
     if (GEO.isWithinMaintenance(row.latitude, row.longitude)) return "maintenance";
     if (GEO.isWithinParking(row.latitude, row.longitude)) return "parked";
-    if ((row.speed || 0) > 0) return "moving";
+    const speed = Number(row.speed) || 0;
+    if (speed > 0 && !isStoppedStatus(row)) return "moving";
     return "idle";
   }
 
@@ -655,7 +662,7 @@ const API = (() => {
     }
 
     const speed = Number(row.speed) || 0;
-    if (speed > 0) {
+    if (speed > 0 && !isStoppedStatus(row)) {
       const isLow = speed <= (CONFIG.SPEED_LOW_THRESHOLD_KMH || 40);
       const subStatus = isLow ? "low_speed" : "high_speed";
       return {
