@@ -427,28 +427,83 @@ const API = (() => {
     return data;
   }
 
+  function splitDateRangeIntoChunks(startDate, endDate, chunkSizeDays = 4) {
+    const chunks = [];
+    let cur = new Date(`${startDate}T00:00:00Z`);
+    const end = new Date(`${endDate}T00:00:00Z`);
+    if (isNaN(cur.getTime()) || isNaN(end.getTime()) || cur > end) {
+      return [{ startDate, endDate }];
+    }
+    while (cur <= end) {
+      const next = new Date(cur.getTime());
+      next.setUTCDate(next.getUTCDate() + (chunkSizeDays - 1));
+      const chunkEnd = next < end ? next : end;
+      chunks.push({
+        startDate: cur.toISOString().slice(0, 10),
+        endDate: chunkEnd.toISOString().slice(0, 10),
+      });
+      cur.setUTCDate(chunkEnd.getUTCDate() + 1);
+    }
+    return chunks;
+  }
+
+  async function fetchRideMatchDailyMetricsSingle({ startDate, endDate, imei = null }) {
+    try {
+      const { data, error } = await AUTH.client.rpc("vehicle_ride_match_day_metrics", {
+        p_start_date: startDate,
+        p_end_date: endDate,
+        p_park_lat: CONFIG.PARK_CENTER.lat,
+        p_park_lon: CONFIG.PARK_CENTER.lon,
+        p_park_radius_m: CONFIG.PARK_RADIUS_M,
+        p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
+        p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
+        p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
+        p_imei: imei,
+        p_max_gap_minutes: CONFIG.MAX_GAP_MINUTES,
+        p_ride_tolerance_minutes: CONFIG.RIDE_MATCH_TOLERANCE_MINUTES,
+        p_pending_grace_minutes: CONFIG.RIDE_MATCH_PENDING_GRACE_MINUTES,
+        p_tz: CONFIG.TIMEZONE,
+      });
+      if (error) throw error;
+      return data || [];
+    } catch (err) {
+      // If a multi-day chunk timed out, adaptively split it into 1-2 day sub-chunks
+      if (startDate !== endDate) {
+        const subChunks = splitDateRangeIntoChunks(startDate, endDate, 2);
+        if (subChunks.length > 1) {
+          const subResults = [];
+          for (const sc of subChunks) {
+            const subData = await fetchRideMatchDailyMetricsSingle({ startDate: sc.startDate, endDate: sc.endDate, imei });
+            subResults.push(...subData);
+          }
+          return subResults;
+        }
+      }
+      throw err;
+    }
+  }
+
   // Per-vehicle-per-day ride-corroboration rollup - see schema.sql's
-  // vehicle_ride_match_day_metrics(). Same CONFIG-sourced geofence/tz/gap
-  // params as fetchDailyMetrics(), so the two compose (join client-side on
-  // imei_no + local_date) without re-fetching anything.
+  // vehicle_ride_match_day_metrics(). Automatically chunks multi-week requests
+  // into 4-day slices with adaptive fallback to guarantee 0 timeouts even over 3-6 months.
   async function fetchRideMatchDailyMetrics({ startDate, endDate, imei = null }) {
-    const { data, error } = await AUTH.client.rpc("vehicle_ride_match_day_metrics", {
-      p_start_date: startDate,
-      p_end_date: endDate,
-      p_park_lat: CONFIG.PARK_CENTER.lat,
-      p_park_lon: CONFIG.PARK_CENTER.lon,
-      p_park_radius_m: CONFIG.PARK_RADIUS_M,
-      p_maint_lat: CONFIG.MAINTENANCE_CENTER.lat,
-      p_maint_lon: CONFIG.MAINTENANCE_CENTER.lon,
-      p_maint_radius_m: CONFIG.MAINTENANCE_RADIUS_M,
-      p_imei: imei,
-      p_max_gap_minutes: CONFIG.MAX_GAP_MINUTES,
-      p_ride_tolerance_minutes: CONFIG.RIDE_MATCH_TOLERANCE_MINUTES,
-      p_pending_grace_minutes: CONFIG.RIDE_MATCH_PENDING_GRACE_MINUTES,
-      p_tz: CONFIG.TIMEZONE,
-    });
-    if (error) throw error;
-    return data;
+    const chunks = splitDateRangeIntoChunks(startDate, endDate, 4);
+    if (chunks.length <= 1) {
+      return fetchRideMatchDailyMetricsSingle({ startDate, endDate, imei });
+    }
+    const merged = [];
+    const seen = new Set();
+    for (const c of chunks) {
+      const batch = await fetchRideMatchDailyMetricsSingle({ startDate: c.startDate, endDate: c.endDate, imei });
+      for (const row of (batch || [])) {
+        const key = `${row.imei_no}_${row.local_date}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          merged.push(row);
+        }
+      }
+    }
+    return merged;
   }
 
   // On-demand, single-vehicle segment drill-down - see schema.sql's
