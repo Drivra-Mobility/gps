@@ -651,7 +651,7 @@
         distance: m.distanceKm,
         distanceToday: distanceTodayByImei.get(row.imei_no) ?? null,
         cashToday: revenueTodayByImei.get(row.imei_no) ?? null,
-        ageSec: API.ageSeconds(row.device_datetime),
+        ageSec: API.ageSeconds(row.device_datetime, row.polled_at),
         battery: Number((row.raw || {}).battery_percentage),
         // Same type source (attrs first, regex-guess fallback) the map
         // marker uses - see MAP.vehicleTypeOf(). "—" (not null) so this

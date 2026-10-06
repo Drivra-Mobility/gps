@@ -594,8 +594,16 @@ const API = (() => {
     return isNaN(d.getTime()) ? null : d;
   }
 
+  function rowTimestamp(row) {
+    if (!row) return null;
+    const d1 = parseDate(row.polled_at);
+    const d2 = parseDate(row.device_datetime);
+    if (d1 && d2) return d1.getTime() > d2.getTime() ? d1 : d2;
+    return d1 || d2;
+  }
+
   function classify(row) {
-    const dt = parseDate(row.polled_at || row.device_datetime);
+    const dt = rowTimestamp(row);
     if (!dt) return "offline";
     const ageMin = (Date.now() - dt.getTime()) / 60000;
     if (ageMin > CONFIG.STALE_MINUTES) return "offline";
@@ -629,7 +637,7 @@ const API = (() => {
       outside_ktm: "Outside KTM",
     };
 
-    const dt = parseDate(row.polled_at || row.device_datetime);
+    const dt = rowTimestamp(row);
     const ageMin = dt ? (Date.now() - dt.getTime()) / 60000 : Infinity;
 
     if (!dt || ageMin > CONFIG.STALE_MINUTES) {
@@ -682,7 +690,9 @@ const API = (() => {
   }
 
   function ageSeconds(deviceDatetime, polledAt) {
-    const dt = parseDate(polledAt || deviceDatetime);
+    const d1 = parseDate(polledAt);
+    const d2 = parseDate(deviceDatetime);
+    const dt = d1 && d2 ? (d1.getTime() > d2.getTime() ? d1 : d2) : (d1 || d2);
     if (!dt) return null;
     return Math.max(0, (Date.now() - dt.getTime()) / 1000);
   }
