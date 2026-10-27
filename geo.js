@@ -19,6 +19,21 @@ const GEO = (() => {
     return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(a));
   }
 
+  // Standard ray-casting point-in-polygon algorithm.
+  function isPointInPolygon(lat, lon, poly) {
+    if (lat == null || lon == null || !Array.isArray(poly) || poly.length < 3) return false;
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const xi = poly[i][0];
+      const yi = poly[i][1];
+      const xj = poly[j][0];
+      const yj = poly[j][1];
+      const intersect = yi > lon !== yj > lon && lat < ((xj - xi) * (lon - yi)) / (yj - yi) + xi;
+      if (intersect) inside = !inside;
+    }
+    return inside;
+  }
+
   // Generic geofence membership check - both PARK_CENTER/PARK_RADIUS_M and
   // MAINTENANCE_CENTER/MAINTENANCE_RADIUS_M go through this. The isWithin*
   // wrappers exist only so call sites don't thread CONFIG constants by hand.
@@ -32,6 +47,9 @@ const GEO = (() => {
   }
 
   function isWithinMaintenance(lat, lon) {
+    if (CONFIG.MAINTENANCE_POLYGON && CONFIG.MAINTENANCE_POLYGON.length >= 3) {
+      return isPointInPolygon(lat, lon, CONFIG.MAINTENANCE_POLYGON);
+    }
     return isWithin(lat, lon, CONFIG.MAINTENANCE_CENTER, CONFIG.MAINTENANCE_RADIUS_M);
   }
 
@@ -68,6 +86,7 @@ const GEO = (() => {
 
   return {
     distanceMeters,
+    isPointInPolygon,
     isWithin,
     isWithinParking,
     isWithinMaintenance,

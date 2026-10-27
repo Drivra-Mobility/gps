@@ -26,19 +26,22 @@ const CONFIG = {
   PARK_CENTER: { lat: 27.7262884, lon: 85.3482266 },
   PARK_RADIUS_M: 200,
 
-  // A second geofence: where vehicles go to be serviced/repaired. Mirrors
-  // PARK_CENTER/PARK_RADIUS_M exactly - edit these two values to move it,
-  // no UI control for it, on purpose.
-  //
-  // UNLIKE PARK_CENTER, this radius is NOT inferred from data (there's no
-  // equivalent "densest cluster of stopped readings" analysis run for this
-  // spot yet) - it's a guess: a repair shop is typically a single small
-  // compound, so a tighter radius than the 200m outdoor parking yard seemed
-  // right. CONFIRM THIS once there's real data near this point, the same
-  // way PARK_RADIUS_M was derived.
-  // Garow Nepal workshop compound (shifted East/NE into compound alley to avoid overlapping Kathmandu Ringroad)
-  MAINTENANCE_CENTER: { lat: 27.73680, lon: 85.34225 },
-  MAINTENANCE_RADIUS_M: 80, // 80m radius covers Garow workshop compound and accounts for urban GPS drift without intersecting Ringroad
+  // A second geofence: where vehicles go to be serviced/repaired (Suman Driving Center maintenance compound).
+  // Polygon covers strictly the compound boundary to prevent vehicles resting or having snacks
+  // on nearby streets (e.g. Mamaghar) from falsely counting as in maintenance.
+  MAINTENANCE_POLYGON: [
+    [27.72685, 85.34735], // Northwest corner pulled inward away from the road below Dikshyanta Academy
+    [27.72705, 85.34785], // North perimeter
+    [27.72712, 85.34855], // Northeast (above driving training track)
+    [27.72665, 85.34878], // East edge (around driving track curve)
+    [27.72635, 85.34860], // Southeast corner (inside compound gate)
+    [27.72620, 85.34780], // South perimeter (inside boundary wall along park road)
+    [27.72620, 85.34725], // Southwest corner pulled inward away from SW road
+    [27.72660, 85.34725], // West perimeter pulled inward away from Brooklyn Int College road
+  ],
+  // Fallback centroid & tight radius for map centering and backend RPC compatibility
+  MAINTENANCE_CENTER: { lat: 27.7267222, lon: 85.3481111 },
+  MAINTENANCE_RADIUS_M: 60,
 
   // A third geofence: Kathmandu valley urban boundary.
   // Vehicles outside both parking/maintenance are classified as In KTM vs Outside KTM.

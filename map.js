@@ -43,16 +43,28 @@ const MAP = (() => {
     })
       .addTo(map)
       .bindTooltip("Parking geofence");
-    L.circle([CONFIG.MAINTENANCE_CENTER.lat, CONFIG.MAINTENANCE_CENTER.lon], {
-      radius: CONFIG.MAINTENANCE_RADIUS_M,
-      color: cssVar("--state-maintenance"),
-      weight: 1.5,
-      dashArray: "4 3",
-      fillOpacity: 0.06,
-      interactive: false,
-    })
-      .addTo(map)
-      .bindTooltip("Maintenance geofence");
+    if (CONFIG.MAINTENANCE_POLYGON && CONFIG.MAINTENANCE_POLYGON.length >= 3) {
+      L.polygon(CONFIG.MAINTENANCE_POLYGON, {
+        color: cssVar("--state-maintenance"),
+        weight: 1.5,
+        dashArray: "4 3",
+        fillOpacity: 0.08,
+        interactive: false,
+      })
+        .addTo(map)
+        .bindTooltip("Maintenance geofence (Suman Driving Center)");
+    } else {
+      L.circle([CONFIG.MAINTENANCE_CENTER.lat, CONFIG.MAINTENANCE_CENTER.lon], {
+        radius: CONFIG.MAINTENANCE_RADIUS_M,
+        color: cssVar("--state-maintenance"),
+        weight: 1.5,
+        dashArray: "4 3",
+        fillOpacity: 0.06,
+        interactive: false,
+      })
+        .addTo(map)
+        .bindTooltip("Maintenance geofence");
+    }
   }
 
   // Smoothly interpolates a marker to a new position over `ms` milliseconds
