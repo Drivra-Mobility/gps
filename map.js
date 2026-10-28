@@ -191,7 +191,12 @@ const MAP = (() => {
     box.appendChild(title);
 
     const rows = [];
-    if (opts.driverName) rows.push(["Driver", opts.driverName]);
+    if (opts.driverName) {
+      rows.push(["Driver", opts.driverName]);
+    } else if (opts.showUnlinkedDriver) {
+      rows.push(["Driver", "No driver linked"]);
+    }
+    if (opts.driverPhone) rows.push(["Phone", opts.driverPhone]);
     rows.push(["State", STATE_LABEL[state] || state]);
     if (opts.stateDuration && opts.stateDuration.seconds > 0) {
       const prefix = opts.stateDuration.sinceStart ? "at least " : "";
@@ -226,6 +231,37 @@ const MAP = (() => {
     return box;
   }
 
+  // Issue #93: hovering a vehicle marker shows vehicle number, driver's name, and phone number.
+  // Tap/click falls through to buildPopup for wall displays & touchscreens.
+  function buildTooltip(row, mapping) {
+    const box = document.createElement("div");
+    box.className = "marker-tip-content";
+
+    const title = document.createElement("div");
+    title.className = "marker-tip-title";
+    title.textContent = row.vehicle_no || row.vehicle_name || row.imei_no || "Vehicle";
+    box.appendChild(title);
+
+    const driverEl = document.createElement("div");
+    if (mapping) {
+      driverEl.className = "marker-tip-row";
+      driverEl.textContent = `Driver: ${mapping.driver_name || "—"}`;
+      box.appendChild(driverEl);
+
+      if (mapping.driver_phone) {
+        const phoneEl = document.createElement("div");
+        phoneEl.className = "marker-tip-row";
+        phoneEl.textContent = `Phone: ${mapping.driver_phone}`;
+        box.appendChild(phoneEl);
+      }
+    } else {
+      driverEl.className = "marker-tip-unlinked";
+      driverEl.textContent = "No driver linked";
+      box.appendChild(driverEl);
+    }
+    return box;
+  }
+
   return {
     init,
     addGeofenceCircles,
@@ -233,6 +269,7 @@ const MAP = (() => {
     vehicleTypeOf,
     iconFor,
     buildPopup,
+    buildTooltip,
     STATE_LABEL,
   };
 })();

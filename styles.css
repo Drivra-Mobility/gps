@@ -908,6 +908,36 @@ input[type="date"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* Marker hover tooltip (Issue #93) */
+.leaflet-tooltip.marker-hover-tip {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.leaflet-tooltip-top.marker-hover-tip::before {
+  border-top-color: var(--border);
+}
+.marker-tip-title {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.marker-tip-row {
+  color: var(--text-muted);
+}
+.marker-tip-unlinked {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 /* Static explainer tooltip for stat labels/column headers - CSS-only (no
    JS) so it works the same everywhere it's dropped in as plain markup.
    Hover OR keyboard focus reveals it; aria-label carries the same text for

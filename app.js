@@ -590,11 +590,24 @@
       // using the display-window set.
       const durationSource = state === "idle" ? durationGrouped : grouped;
       const stateDuration = API.stateDurationFromHistory(durationSource.get(row.imei_no) || [], state);
+      const mapping = driverByImei.get(row.imei_no);
+      const dName = mapping ? mapping.driver_name || mapping.driver_phone : null;
+      const dPhone = mapping ? mapping.driver_phone : null;
+
+      marker.bindTooltip(MAP.buildTooltip(row, mapping), {
+        className: "marker-hover-tip",
+        direction: "top",
+        offset: [0, -10],
+        opacity: 0.98,
+      });
+
       marker.bindPopup(
         MAP.buildPopup(row, state, {
           link: `vehicle.html?imei=${encodeURIComponent(row.imei_no)}`,
           stateDuration,
-          driverName: driverName(row.imei_no),
+          driverName: dName,
+          driverPhone: dPhone,
+          showUnlinkedDriver: true,
         })
       );
     }

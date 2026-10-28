@@ -203,7 +203,14 @@
     const durationSource = state === "idle" ? durationRows : rows;
     const stateDuration = API.stateDurationFromHistory(durationSource, state);
     const driverName = currentDriver ? currentDriver.driver_name || currentDriver.driver_phone : null;
-    marker.bindPopup(MAP.buildPopup(latest, state, { stateDuration, driverName }));
+    const driverPhone = currentDriver ? currentDriver.driver_phone : null;
+    marker.bindTooltip(MAP.buildTooltip(latest, currentDriver), {
+      className: "marker-hover-tip",
+      direction: "top",
+      offset: [0, -10],
+      opacity: 0.98,
+    });
+    marker.bindPopup(MAP.buildPopup(latest, state, { stateDuration, driverName, driverPhone, showUnlinkedDriver: true }));
   }
 
   function renderChart() {
